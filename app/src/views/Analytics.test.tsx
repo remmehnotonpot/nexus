@@ -1,24 +1,72 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Analytics } from './Analytics';
+import { createMockShipment } from '@/test/mocks/data';
+
+// Mock the supabase client
+vi.mock('@/lib/supabase', () => ({
+  supabase: {
+    from: vi.fn(),
+    channel: vi.fn(),
+    removeChannel: vi.fn(),
+  },
+}));
+
+import { supabase } from '@/lib/supabase';
 
 describe('Analytics View', () => {
-  it('renders key metrics', () => {
-    render(<Analytics />);
-    
-    expect(screen.getByText('Analytics Dashboard')).toBeInTheDocument();
+  beforeEach(() => {
+    vi.resetAllMocks();
   });
 
-  it('displays shipment statistics', () => {
+  const setupMockShipments = (shipments: ReturnType<typeof createMockShipment>[]) => {
+    vi.mocked(supabase.from).mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        order: vi.fn().mockResolvedValue({ data: shipments, error: null }),
+      }),
+    } as unknown as ReturnType<typeof supabase.from>);
+  };
+
+  it('renders key metrics', async () => {
+    setupMockShipments([
+      createMockShipment({ id: '1', status: 'in_transit' }),
+      createMockShipment({ id: '2', status: 'delivered' }),
+    ]);
+
     render(<Analytics />);
     
-    const metrics = screen.getAllByText(/\d+/);
-    expect(metrics.length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getByText('Analytics Dashboard')).toBeInTheDocument();
+    });
   });
 
-  it('switches between tabs', () => {
+  it('displays shipment statistics', async () => {
+    setupMockShipments([
+      createMockShipment({ id: '1', status: 'in_transit', weight_kg: 1000, volume_cbm: 10 }),
+      createMockShipment({ id: '2', status: 'delivered', weight_kg: 2000, volume_cbm: 20 }),
+      createMockShipment({ id: '3', status: 'exception', weight_kg: 500, volume_cbm: 5 }),
+    ]);
+
     render(<Analytics />);
     
+    await waitFor(() => {
+      const metrics = screen.getAllByText(/\d+/);
+      expect(metrics.length).toBeGreaterThan(0);
+    });
+  });
+
+  it('switches between tabs', async () => {
+    setupMockShipments([
+      createMockShipment({ id: '1', status: 'in_transit' }),
+      createMockShipment({ id: '2', status: 'delivered' }),
+    ]);
+
+    render(<Analytics />);
+    
+    await waitFor(() => {
+      expect(screen.getByRole('tab', { name: /top routes/i })).toBeInTheDocument();
+    });
+
     const routesTab = screen.getByRole('tab', { name: /top routes/i });
     fireEvent.click(routesTab);
     
@@ -30,25 +78,46 @@ describe('Analytics View', () => {
     expect(screen.getByText('Active Shipments')).toBeInTheDocument();
   });
 
-  it('displays overview tab by default', () => {
+  it('displays overview tab by default', async () => {
+    setupMockShipments([
+      createMockShipment({ id: '1', status: 'in_transit' }),
+      createMockShipment({ id: '2', status: 'delivered' }),
+    ]);
+
     render(<Analytics />);
     
-    expect(screen.getByText('Cargo Volume')).toBeInTheDocument();
-    expect(screen.getByText('Status Breakdown')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('Cargo Volume')).toBeInTheDocument();
+      expect(screen.getByText('Status Breakdown')).toBeInTheDocument();
+    });
   });
 
-  it('shows last updated date', () => {
+  it('shows last updated date', async () => {
+    setupMockShipments([
+      createMockShipment({ id: '1', status: 'in_transit' }),
+    ]);
+
     render(<Analytics />);
     
-    expect(screen.getByText(/Last updated:/)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Last updated:/)).toBeInTheDocument();
+    });
   });
 
-  it('displays transport mode tab', () => {
+  it('displays transport mode tab', async () => {
+    setupMockShipments([
+      createMockShipment({ id: '1', status: 'in_transit', transport_mode: 'ocean' }),
+      createMockShipment({ id: '2', status: 'delivered', transport_mode: 'air' }),
+    ]);
+
     render(<Analytics />);
     
+    await waitFor(() => {
+      const transportTab = screen.getByRole('tab', { name: /transport modes/i });
+      expect(transportTab).toBeInTheDocument();
+    });
+
     const transportTab = screen.getByRole('tab', { name: /transport modes/i });
-    expect(transportTab).toBeInTheDocument();
-    
     fireEvent.click(transportTab);
     expect(transportTab).toBeInTheDocument();
   });

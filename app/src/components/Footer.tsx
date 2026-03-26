@@ -3,10 +3,6 @@ import {
   Mail, 
   Phone, 
   MapPin,
-  Linkedin,
-  Twitter,
-  Facebook,
-  Instagram,
   ArrowRight,
   Shield,
   FileText,
@@ -24,7 +20,7 @@ export const Footer = () => {
           {/* Brand column */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-6">
-              <img src="/logo.png" alt="Swish Portal" className="h-10 w-auto" />
+              <img src="/logo.png" alt="Swish Portal" className="h-12 w-auto" />
             </Link>
             <p className="text-sm mb-6 max-w-xs">
               End-to-end logistics solutions powering global trade. 
@@ -46,19 +42,6 @@ export const Footer = () => {
                 <MapPin className="w-4 h-4 text-sky-500" />
                 <span>1211 Geneva, Switzerland</span>
               </div>
-            </div>
-
-            {/* Social links */}
-            <div className="flex items-center gap-3 mt-6">
-              {[Linkedin, Twitter, Facebook, Instagram].map((Icon, index) => (
-                <a
-                  key={index}
-                  href="#"
-                  className="w-9 h-9 rounded-lg bg-slate-900 flex items-center justify-center hover:bg-sky-500 hover:text-white transition-all"
-                >
-                  <Icon className="w-4 h-4" />
-                </a>
-              ))}
             </div>
           </div>
 
@@ -93,10 +76,10 @@ export const Footer = () => {
             <ul className="space-y-3">
               {[
                 { label: 'About Us', href: '/about' },
-                { label: 'Careers', href: '/about#careers' },
-                { label: 'Press & Media', href: '/about#press' },
-                { label: 'Sustainability', href: '/about#sustainability' },
-                { label: 'Partners', href: '/about#partners' },
+                { label: 'Careers', href: '/careers' },
+                { label: 'Press & Media', href: '/press' },
+                { label: 'Sustainability', href: '/sustainability' },
+                { label: 'Partners', href: '/partners' },
               ].map((item) => (
                 <li key={item.label}>
                   <Link 
@@ -116,10 +99,10 @@ export const Footer = () => {
             <h4 className="text-white font-semibold mb-4">Support</h4>
             <ul className="space-y-3">
               {[
-                { label: 'Help Center', href: '/contact#help' },
+                { label: 'Help Center', href: '/help' },
                 { label: 'Track Shipment', href: '/tracking' },
                 { label: 'Contact Us', href: '/contact' },
-                { label: 'API Documentation', href: '/contact#api' },
+                { label: 'API Documentation', href: '/api-docs' },
                 { label: 'FAQs', href: '/contact#faq' },
               ].map((item) => (
                 <li key={item.label}>
@@ -246,16 +229,16 @@ export const Footer = () => {
               Copyright © 2026 Swish Portal Holdings B.V. All rights reserved.
             </p>
             <div className="flex flex-wrap items-center justify-center gap-4 text-xs">
-              <Link href="/contact#terms" className="hover:text-sky-500 transition-colors">
+              <Link href="/legal/terms" className="hover:text-sky-500 transition-colors">
                 Terms of Use
               </Link>
-              <Link href="/contact#privacy" className="hover:text-sky-500 transition-colors">
+              <Link href="/legal/privacy" className="hover:text-sky-500 transition-colors">
                 Privacy Policy
               </Link>
-              <Link href="/contact#cookies" className="hover:text-sky-500 transition-colors">
+              <Link href="/legal/cookies" className="hover:text-sky-500 transition-colors">
                 Cookie Policy
               </Link>
-              <Link href="/contact#security" className="hover:text-sky-500 transition-colors">
+              <Link href="/legal/security" className="hover:text-sky-500 transition-colors">
                 Security
               </Link>
             </div>
