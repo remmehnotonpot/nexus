@@ -2,16 +2,24 @@
 
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Package } from 'lucide-react';
+import { ArrowLeft, Package, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { CreateShipmentForm } from '@/components/forms/CreateShipmentForm';
 import { createShipment } from '@/lib/api/shipments';
 import { generateTrackingNumber } from '@/hooks/useSimulation';
+import { useAuth, useRequireRole } from '@/hooks/useAuth';
 import type { ShipmentFormData } from '@/lib/geocoding';
 import type { Shipment } from '@/types';
 
 export default function ShipmentNew() {
   const router = useRouter();
+  const { isLoading: authLoading } = useAuth();
+
+  // Require staff role - only these roles can create shipments
+  useRequireRole(
+    ['super_admin', 'operations_manager', 'logistics_coordinator'],
+    '/dashboard'
+  );
 
   const handleCreateShipment = async (data: ShipmentFormData) => {
     const trackingNumber = generateTrackingNumber();
@@ -65,6 +73,14 @@ export default function ShipmentNew() {
     router.push('/shipments');
     router.refresh();
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 pt-20 pb-12 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 pt-20 pb-12">

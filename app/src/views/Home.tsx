@@ -19,15 +19,11 @@ import {
   Package,
   BarChart3,
   Award,
-  Star,
   Quote,
   ChevronRight,
   Phone,
   Mail,
-  MapPin,
-  Zap,
-  HeartHandshake,
-  Leaf
+  MapPin
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -790,45 +786,10 @@ const ContactSection = () => {
   );
 };
 
-// Advertisement Banner Component
-const AdBanner = () => {
-  return (
-    <motion.div 
-      className="bg-gradient-to-r from-sky-500 to-sky-600 py-4"
-      initial={{ opacity: 0, y: -20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <motion.div
-              animate={{ rotate: [0, 15, -15, 0] }}
-              transition={{ duration: 2, repeat: Infinity, repeatDelay: 3 }}
-            >
-              <Star className="w-6 h-6 text-white" />
-            </motion.div>
-            <span className="text-white font-medium">
-              New Customer Offer: Get 20% off your first international shipment!
-            </span>
-          </div>
-          <Link href="/contact">
-            <Button variant="secondary" size="sm" className="bg-white text-sky-600 hover:bg-slate-100">
-              Learn More
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
-          </Link>
-        </div>
-      </div>
-    </motion.div>
-  );
-};
-
 // Main Home Page
 const Home = () => {
   return (
     <div className="min-h-screen">
-      <AdBanner />
       <HeroSection />
       <WhyChooseUsSection />
       <AboutSection />

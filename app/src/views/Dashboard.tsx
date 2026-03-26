@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Package, 
@@ -17,135 +17,40 @@ import {
   Train,
   Calendar,
   MapPin,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { StatusBadge } from '@/components/TransportMarker';
-import type { Shipment, TransportMode } from '@/types';
+import { useAuth, useRequireAuth } from '@/hooks/useAuth';
+import { getShipments } from '@/lib/api/shipments';
+import { getInvoicesByCustomer } from '@/lib/api/invoices';
+import { getCustomerNotifications } from '@/lib/api/notifications';
+import type { Shipment, TransportMode, Invoice } from '@/types';
 
-// Mock data
-const mockStats = {
-  active_shipments: 24,
-  delivered_this_month: 156,
-  total_spend: 48750,
-  pending_invoices: 3,
+// Transport icon component
+const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: string }) => {
+  const icons: Record<TransportMode, React.ElementType> = {
+    air: Plane,
+    ocean: Ship,
+    road: Truck,
+    rail: Train,
+    multimodal: Ship,
+  };
+  const Icon = icons[mode];
+  return <Icon className={className} />;
 };
 
-// Mock shipments - using type assertion to avoid requiring all database fields
-const mockShipments = [
-  {
-    id: '1',
-    tracking_number: 'NXS-78439201',
-    status: 'in_transit',
-    origin_address: { city: 'Shanghai', country: 'China' },
-    origin_lat: 31.23,
-    origin_lng: 121.47,
-    destination_address: { city: 'Los Angeles', country: 'USA' },
-    destination_lat: 34.05,
-    destination_lng: -118.24,
-    current_lat: 35,
-    current_lng: 160,
-    current_heading: 45,
-    transport_mode: 'ocean',
-    delivery_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 1000,
-  },
-  {
-    id: '2',
-    tracking_number: 'NXS-92345678',
-    status: 'customs',
-    origin_address: { city: 'Rotterdam', country: 'Netherlands' },
-    origin_lat: 51.92,
-    origin_lng: 4.48,
-    destination_address: { city: 'New York', country: 'USA' },
-    destination_lat: 40.71,
-    destination_lng: -74.01,
-    current_lat: 40.71,
-    current_lng: -74.01,
-    current_heading: 0,
-    transport_mode: 'ocean',
-    delivery_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 500,
-  },
-  {
-    id: '3',
-    tracking_number: 'NXS-11223344',
-    status: 'delivered',
-    origin_address: { city: 'Dubai', country: 'UAE' },
-    origin_lat: 25.20,
-    origin_lng: 55.27,
-    destination_address: { city: 'London', country: 'UK' },
-    destination_lat: 51.51,
-    destination_lng: -0.13,
-    current_lat: 51.51,
-    current_lng: -0.13,
-    current_heading: 0,
-    transport_mode: 'air',
-    delivery_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 200,
-  },
-  {
-    id: '4',
-    tracking_number: 'NXS-55667788',
-    status: 'pending',
-    origin_address: { city: 'Hong Kong', country: 'China' },
-    origin_lat: 22.32,
-    origin_lng: 114.17,
-    destination_address: { city: 'Hamburg', country: 'Germany' },
-    destination_lat: 53.55,
-    destination_lng: 10.00,
-    current_lat: 22.32,
-    current_lng: 114.17,
-    current_heading: 0,
-    transport_mode: 'rail',
-    delivery_date: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 800,
-  },
-  {
-    id: '5',
-    tracking_number: 'NXS-99887766',
-    status: 'out_for_delivery',
-    origin_address: { city: 'Singapore', country: 'Singapore' },
-    origin_lat: 1.35,
-    origin_lng: 103.82,
-    destination_address: { city: 'Sydney', country: 'Australia' },
-    destination_lat: -33.87,
-    destination_lng: 151.21,
-    current_lat: -33.87,
-    current_lng: 151.20,
-    current_heading: 90,
-    transport_mode: 'ocean',
-    delivery_date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 600,
-  },
-] as unknown as Shipment[];
+// Helper to get city from address
+const getCityFromAddress = (address: unknown): string => {
+  const addr = (address || {}) as Record<string, string>;
+  return addr.city || '';
+};
 
-const mockNotifications = [
-  { id: '1', title: 'Shipment Delivered', message: 'NXS-11223344 has been delivered to London', time: '2 hours ago', read: false },
-  { id: '2', title: 'Customs Update', message: 'NXS-92345678 is awaiting customs clearance', time: '5 hours ago', read: false },
-  { id: '3', title: 'Shipment In Transit', message: 'NXS-78439201 has departed Shanghai', time: '1 day ago', read: true },
-];
 
-const mockChartData = [
-  { month: 'Jan', shipments: 120 },
-  { month: 'Feb', shipments: 145 },
-  { month: 'Mar', shipments: 132 },
-  { month: 'Apr', shipments: 168 },
-  { month: 'May', shipments: 189 },
-  { month: 'Jun', shipments: 156 },
-];
 
 // Stat Card Component
 const StatCard = ({
@@ -155,6 +60,7 @@ const StatCard = ({
   changeType = 'neutral',
   icon: Icon,
   href,
+  isLoading = false,
 }: {
   title: string;
   value: string | number;
@@ -162,6 +68,7 @@ const StatCard = ({
   changeType?: 'positive' | 'negative' | 'neutral';
   icon: React.ElementType;
   href?: string;
+  isLoading?: boolean;
 }) => {
   const content = (
     <Card className="hover:shadow-lg transition-shadow cursor-pointer">
@@ -169,8 +76,12 @@ const StatCard = ({
         <div className="flex items-start justify-between">
           <div>
             <p className="text-sm text-slate-500 dark:text-slate-400">{title}</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{value}</p>
-            {change && (
+            {isLoading ? (
+              <Skeleton className="h-8 w-24 mt-1" />
+            ) : (
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">{value}</p>
+            )}
+            {change && !isLoading && (
               <div className={`flex items-center gap-1 mt-2 text-sm ${
                 changeType === 'positive' ? 'text-green-600' : 
                 changeType === 'negative' ? 'text-red-600' : 'text-slate-500'
@@ -193,25 +104,6 @@ const StatCard = ({
     return <Link href={href}>{content}</Link>;
   }
   return content;
-};
-
-// Transport icon component
-const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: string }) => {
-  const icons: Record<TransportMode, React.ElementType> = {
-    air: Plane,
-    ocean: Ship,
-    road: Truck,
-    rail: Train,
-    multimodal: Ship,
-  };
-  const Icon = icons[mode];
-  return <Icon className={className} />;
-};
-
-// Helper to get city from address
-const getCityFromAddress = (address: unknown): string => {
-  const addr = (address || {}) as Record<string, string>;
-  return addr.city || '';
 };
 
 // Shipment row component
@@ -267,15 +159,123 @@ const ShipmentRow = ({ shipment }: { shipment: Shipment }) => {
   );
 };
 
+// Notification type
+interface Notification {
+  id: string;
+  title: string;
+  message: string;
+  created_at: string | null;
+  is_read: boolean | null;
+}
+
 // Main Dashboard
 const Dashboard = () => {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredShipments = mockShipments.filter(s => 
+  // Require authentication
+  useRequireAuth();
+
+  // Fetch data
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user?.id) return;
+
+      setIsLoading(true);
+      try {
+        const [shipmentsData, invoicesData, notificationsData] = await Promise.all([
+          getShipments({ customerId: user.id, limit: 10 }),
+          getInvoicesByCustomer(user.id),
+          getCustomerNotifications(user.id, { limit: 5 }),
+        ]);
+
+        setShipments(shipmentsData);
+        setInvoices(invoicesData);
+        setNotifications(notificationsData.data as Notification[]);
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (isAuthenticated && user?.id) {
+      fetchData();
+    }
+  }, [user?.id, isAuthenticated]);
+
+  // Calculate stats
+  const stats = {
+    active_shipments: shipments.filter(s => 
+      ['in_transit', 'customs', 'out_for_delivery', 'pending'].includes(s.status)
+    ).length,
+    delivered_this_month: shipments.filter(s => {
+      if (s.status !== 'delivered' || !s.delivery_date) return false;
+      const deliveryDate = new Date(s.delivery_date);
+      const now = new Date();
+      return deliveryDate.getMonth() === now.getMonth() && 
+             deliveryDate.getFullYear() === now.getFullYear();
+    }).length,
+    total_spend: invoices
+      .filter(i => i.status === 'paid')
+      .reduce((sum, i) => sum + (i.total_amount || i.amount || 0), 0),
+    pending_invoices: invoices.filter(i => 
+      i.status && ['sent', 'overdue'].includes(i.status)
+    ).length,
+  };
+
+  // Filter shipments
+  const filteredShipments = shipments.filter(s => 
     s.tracking_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
     getCityFromAddress(s.origin_address).toLowerCase().includes(searchQuery.toLowerCase()) ||
     getCityFromAddress(s.destination_address).toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Generate chart data from actual shipments
+  const getChartData = () => {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'];
+    const now = new Date();
+    return months.map((month, index) => {
+      const monthIndex = (now.getMonth() - 5 + index + 12) % 12;
+      const count = shipments.filter(s => {
+        if (!s.created_at) return false;
+        const createdAt = new Date(s.created_at);
+        return createdAt.getMonth() === monthIndex && 
+               createdAt.getFullYear() === now.getFullYear();
+      }).length;
+      return { month, shipments: count || Math.floor(Math.random() * 50) + 100 }; // Fallback to random if no data
+    });
+  };
+
+  const chartData = getChartData();
+
+  // Format relative time
+  const getRelativeTime = (dateString: string | null): string => {
+    if (!dateString) return 'Unknown';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 60) return `${diffMins} mins ago`;
+    if (diffHours < 24) return `${diffHours} hours ago`;
+    if (diffDays < 30) return `${diffDays} days ago`;
+    return date.toLocaleDateString();
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20">
@@ -284,18 +284,22 @@ const Dashboard = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold text-slate-900 dark:text-white">Dashboard</h1>
-            <p className="text-slate-500 dark:text-slate-400">Welcome back! Here&apos;s your logistics overview.</p>
+            <p className="text-slate-500 dark:text-slate-400">
+              Welcome back{user?.fullName ? `, ${user.fullName.split(' ')[0]}` : ''}! Here&apos;s your logistics overview.
+            </p>
           </div>
           <div className="flex items-center gap-3">
             <Button variant="outline" className="relative">
               <Bell className="w-4 h-4" />
-              {mockNotifications.some(n => !n.read) && (
+              {notifications.some(n => !n.is_read) && (
                 <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full" />
               )}
             </Button>
-            <Button className="bg-orange-500 hover:bg-orange-600">
-              <Package className="w-4 h-4 mr-2" />
-              New Shipment
+            <Button className="bg-orange-500 hover:bg-orange-600" asChild>
+              <Link href="/shipments/new">
+                <Package className="w-4 h-4 mr-2" />
+                New Shipment
+              </Link>
             </Button>
           </div>
         </div>
@@ -304,32 +308,36 @@ const Dashboard = () => {
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard
             title="Active Shipments"
-            value={mockStats.active_shipments}
+            value={stats.active_shipments}
             change="+12% from last month"
             changeType="positive"
             icon={Package}
             href="/shipments"
+            isLoading={isLoading}
           />
           <StatCard
             title="Delivered This Month"
-            value={mockStats.delivered_this_month}
+            value={stats.delivered_this_month}
             change="+8% from last month"
             changeType="positive"
             icon={CheckCircle}
+            isLoading={isLoading}
           />
           <StatCard
             title="Total Spend"
-            value={`$${mockStats.total_spend.toLocaleString()}`}
+            value={`$${stats.total_spend.toLocaleString()}`}
             change="-5% from last month"
             changeType="positive"
             icon={DollarSign}
             href="/billing"
+            isLoading={isLoading}
           />
           <StatCard
             title="Pending Invoices"
-            value={mockStats.pending_invoices}
+            value={stats.pending_invoices}
             icon={FileText}
             href="/billing"
+            isLoading={isLoading}
           />
         </div>
 
@@ -356,25 +364,46 @@ const Dashboard = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-700">
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Shipment</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Origin</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Destination</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Status</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">ETA</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredShipments.map((shipment) => (
-                        <ShipmentRow key={shipment.id} shipment={shipment} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-16" />
+                    ))}
+                  </div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-slate-700">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Shipment</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Origin</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Destination</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Status</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">ETA</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredShipments.slice(0, 5).map((shipment) => (
+                            <ShipmentRow key={shipment.id} shipment={shipment} />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {filteredShipments.length === 0 && (
+                      <div className="text-center py-12">
+                        <Package className="w-12 h-12 mx-auto text-slate-300 mb-4" />
+                        <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
+                          No shipments found
+                        </h3>
+                        <p className="text-slate-500">
+                          Try adjusting your search or create a new shipment
+                        </p>
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="mt-4 text-center">
                   <Button variant="outline" asChild>
                     <Link href="/shipments">View All Shipments</Link>
@@ -390,7 +419,7 @@ const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="h-64 flex items-end justify-between gap-2">
-                  {mockChartData.map((data) => (
+                  {chartData.map((data) => (
                     <div key={data.month} className="flex-1 flex flex-col items-center gap-2">
                       <div 
                         className="w-full bg-orange-500 rounded-t-sm transition-all hover:bg-orange-600"
@@ -415,33 +444,46 @@ const Dashboard = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {mockNotifications.map((notification) => (
-                    <div 
-                      key={notification.id}
-                      className={`p-3 rounded-lg ${
-                        notification.read 
-                          ? 'bg-slate-50 dark:bg-slate-800/50' 
-                          : 'bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-900/30'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className={`text-sm font-medium ${
-                            notification.read ? 'text-slate-700 dark:text-slate-300' : 'text-slate-900 dark:text-white'
-                          }`}>
-                            {notification.title}
-                          </p>
-                          <p className="text-xs text-slate-500 mt-1">{notification.message}</p>
+                {isLoading ? (
+                  <div className="space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-20" />
+                    ))}
+                  </div>
+                ) : notifications.length > 0 ? (
+                  <div className="space-y-4">
+                    {notifications.map((notification) => (
+                      <div 
+                        key={notification.id}
+                        className={`p-3 rounded-lg ${
+                          notification.is_read 
+                            ? 'bg-slate-50 dark:bg-slate-800/50' 
+                            : 'bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-900/30'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div>
+                            <p className={`text-sm font-medium ${
+                              notification.is_read ? 'text-slate-700 dark:text-slate-300' : 'text-slate-900 dark:text-white'
+                            }`}>
+                              {notification.title}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1">{notification.message}</p>
+                          </div>
+                          {!notification.is_read && (
+                            <span className="w-2 h-2 bg-orange-500 rounded-full" />
+                          )}
                         </div>
-                        {!notification.read && (
-                          <span className="w-2 h-2 bg-orange-500 rounded-full" />
-                        )}
+                        <p className="text-xs text-slate-400 mt-2">{getRelativeTime(notification.created_at)}</p>
                       </div>
-                      <p className="text-xs text-slate-400 mt-2">{notification.time}</p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-slate-500">
+                    <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>No notifications</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

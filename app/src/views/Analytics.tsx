@@ -26,7 +26,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { calculateETA, formatRemainingTime, getDelaySeverityBadge } from '@/lib/eta';
 import { getShipments } from '@/lib/api/shipments';
-import type { Shipment, TrackingLog, TransportMode } from '@/types';
+import { useAuth, useRequireAuth } from '@/hooks/useAuth';
+import type { Shipment, TransportMode } from '@/types';
 
 const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: string }) => {
   const icons: Record<TransportMode, React.ReactNode> = {
@@ -60,13 +61,19 @@ interface RoutePerformance {
 }
 
 export function Analytics() {
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Require authentication
+  useRequireAuth();
+
   // Fetch real data from API
   useEffect(() => {
     const fetchData = async () => {
+      if (!isAuthenticated) return;
+      
       try {
         setIsLoading(true);
         const data = await getShipments();
@@ -80,7 +87,7 @@ export function Analytics() {
     };
 
     fetchData();
-  }, []);
+  }, [isAuthenticated]);
 
   // Calculate analytics statistics from real data
   const stats: AnalyticsStats = useMemo(() => {
@@ -183,7 +190,7 @@ export function Analytics() {
     return breakdown;
   }, [shipments]);
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div className="min-h-screen bg-slate-950 pt-20 pb-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

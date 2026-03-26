@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
-  Globe, 
   Menu, 
   X, 
   Sun, 
@@ -71,26 +70,6 @@ export const Header = ({ transparent = false }: HeaderProps) => {
           : 'bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800'
       }`}
     >
-      {/* Top bar - only show on non-transparent */}
-      {!showTransparent && (
-        <div className="bg-slate-950 text-slate-400 text-xs py-2">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <span className="flex items-center gap-1">
-                <Globe className="w-3 h-3" />
-                Global Logistics Solutions
-              </span>
-              <span className="hidden sm:inline">|</span>
-              <span className="hidden sm:inline">24/7 Support: +1 (800) SWISH-GL</span>
-            </div>
-            <div className="flex items-center gap-4">
-              <Link href="/dashboard" className="hover:text-white transition-colors">Client Portal</Link>
-              <Link href="/admin/control" className="hover:text-white transition-colors">Admin</Link>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main header */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -99,7 +78,7 @@ export const Header = ({ transparent = false }: HeaderProps) => {
             <img 
               src="/logo.png" 
               alt="Swish Portal" 
-              className="h-12 w-auto"
+              className="h-16 w-auto"
             />
           </Link>
 

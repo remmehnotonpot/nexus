@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth, useRequireRole } from '@/hooks/useAuth';
 import { createQuote, calculateEstimatedPrice } from '@/lib/api/quotes';
 import { LocationAutocomplete, ExtractedLocation } from '@/components/LocationAutocomplete';
 import { calculateDistance } from '@/lib/geocoding';
@@ -19,6 +19,7 @@ import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { MobileHeader } from '@/components/mobile/MobileHeader';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Icons
 import {
@@ -56,7 +57,11 @@ const CARGO_TYPES = [
 
 export function QuoteRequest() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
+
+  // Require customer role - only customers can request quotes
+  useRequireRole(['customer'], '/ops/dashboard');
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState('');
@@ -184,6 +189,21 @@ export function QuoteRequest() {
     destination &&
     formData.weightKg &&
     parseFloat(formData.weightKg) > 0;
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background pb-20">
+        <MobileHeader />
+        <div className="p-4 space-y-4">
+          <Skeleton className="h-8" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-32" />
+          <Skeleton className="h-48" />
+        </div>
+        <MobileBottomNav />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background pb-20">

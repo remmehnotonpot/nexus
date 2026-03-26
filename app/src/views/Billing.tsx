@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { 
   CreditCard, 
   FileText, 
@@ -13,97 +14,26 @@ import {
   Calendar,
   Building2,
   Mail,
-  Phone
+  Phone,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useAuth, useRequireAuth } from '@/hooks/useAuth';
+import { getInvoicesByCustomer } from '@/lib/api/invoices';
 import type { Invoice } from '@/types';
 
 // Invoice status type derived from Invoice table
 type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
-
-// Mock data - using Partial<Invoice> to allow optional fields for demo
-const mockInvoices: Partial<Invoice>[] = [
-  {
-    id: '1',
-    invoice_number: 'INV-2026-001',
-    customer_id: 'user-1',
-    amount: 4850.00,
-    total_amount: 4850.00,
-    currency: 'USD',
-    status: 'paid',
-    issue_date: '2026-03-01',
-    due_date: '2026-03-15',
-    paid_date: '2026-03-10',
-    notes: 'Ocean freight - Shanghai to Los Angeles',
-    created_at: '2026-03-01',
-  },
-  {
-    id: '2',
-    invoice_number: 'INV-2026-002',
-    customer_id: 'user-1',
-    amount: 3200.00,
-    total_amount: 3200.00,
-    currency: 'USD',
-    status: 'sent',
-    issue_date: '2026-03-10',
-    due_date: '2026-03-24',
-    notes: 'Air freight - Dubai to London',
-    created_at: '2026-03-10',
-  },
-  {
-    id: '3',
-    invoice_number: 'INV-2026-003',
-    customer_id: 'user-1',
-    amount: 7800.00,
-    total_amount: 7800.00,
-    currency: 'USD',
-    status: 'overdue',
-    issue_date: '2026-02-15',
-    due_date: '2026-03-01',
-    notes: 'Rail freight - Hong Kong to Hamburg',
-    created_at: '2026-02-15',
-  },
-  {
-    id: '4',
-    invoice_number: 'INV-2026-004',
-    customer_id: 'user-1',
-    amount: 1250.00,
-    total_amount: 1250.00,
-    currency: 'USD',
-    status: 'draft',
-    issue_date: '2026-03-18',
-    notes: 'Warehousing - March 2026',
-    created_at: '2026-03-18',
-  },
-  {
-    id: '5',
-    invoice_number: 'INV-2026-005',
-    customer_id: 'user-1',
-    amount: 5600.00,
-    total_amount: 5600.00,
-    currency: 'USD',
-    status: 'paid',
-    issue_date: '2026-02-01',
-    due_date: '2026-02-15',
-    paid_date: '2026-02-12',
-    notes: 'Ocean freight - Rotterdam to New York',
-    created_at: '2026-02-01',
-  },
-];
-
-const paymentMethods = [
-  { id: '1', type: 'visa', last4: '4242', expiry: '12/27', default: true },
-  { id: '2', type: 'mastercard', last4: '8888', expiry: '08/26', default: false },
-];
 
 // Status badge component
 const InvoiceStatusBadge = ({ status }: { status: InvoiceStatus }) => {
@@ -127,10 +57,8 @@ const InvoiceStatusBadge = ({ status }: { status: InvoiceStatus }) => {
 };
 
 // Invoice row component
-const InvoiceRow = ({ invoice }: { invoice: Partial<Invoice> }) => {
-  const status = invoice.status as InvoiceStatus | null | undefined;
-  const notes = invoice.notes;
-  const issueDate = invoice.issue_date;
+const InvoiceRow = ({ invoice }: { invoice: Invoice }) => {
+  const status = invoice.status as InvoiceStatus;
   
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
@@ -143,17 +71,17 @@ const InvoiceRow = ({ invoice }: { invoice: Partial<Invoice> }) => {
             <p className="font-mono font-medium text-slate-900 dark:text-white">
               {invoice.invoice_number}
             </p>
-            <p className="text-xs text-slate-500">{notes || '—'}</p>
+            <p className="text-xs text-slate-500">{invoice.notes || '—'}</p>
           </div>
         </div>
       </td>
       <td className="py-4 px-4">
-        {status ? <InvoiceStatusBadge status={status} /> : <span className="text-slate-400">—</span>}
+        <InvoiceStatusBadge status={status} />
       </td>
       <td className="py-4 px-4">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-slate-400" />
-          <span className="text-sm">{issueDate ? new Date(issueDate).toLocaleDateString() : '—'}</span>
+          <span className="text-sm">{invoice.issue_date ? new Date(invoice.issue_date).toLocaleDateString() : '—'}</span>
         </div>
       </td>
       <td className="py-4 px-4">
@@ -164,9 +92,9 @@ const InvoiceRow = ({ invoice }: { invoice: Partial<Invoice> }) => {
       </td>
       <td className="py-4 px-4">
         <p className="font-medium text-slate-900 dark:text-white">
-          ${(invoice.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          ${((invoice.total_amount || invoice.amount || 0)).toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </p>
-        <p className="text-xs text-slate-500">{invoice.currency}</p>
+        <p className="text-xs text-slate-500">{invoice.currency || 'USD'}</p>
       </td>
       <td className="py-4 px-4">
         <DropdownMenu>
@@ -176,8 +104,8 @@ const InvoiceRow = ({ invoice }: { invoice: Partial<Invoice> }) => {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
-              View Details
+            <DropdownMenuItem asChild>
+              <Link href={`/billing/${invoice.id}`}>View Details</Link>
             </DropdownMenuItem>
             <DropdownMenuItem>
               Download PDF
@@ -196,11 +124,38 @@ const InvoiceRow = ({ invoice }: { invoice: Partial<Invoice> }) => {
 
 // Main Billing Page
 const Billing = () => {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
 
+  // Require authentication
+  useRequireAuth();
+
+  // Fetch invoices
+  useEffect(() => {
+    const fetchInvoices = async () => {
+      if (!user?.id) return;
+
+      setIsLoading(true);
+      try {
+        const data = await getInvoicesByCustomer(user.id);
+        setInvoices(data);
+      } catch (error) {
+        console.error('Error fetching invoices:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (isAuthenticated && user?.id) {
+      fetchInvoices();
+    }
+  }, [user?.id, isAuthenticated]);
+
   // Filter invoices
-  const filteredInvoices = mockInvoices.filter(invoice => {
+  const filteredInvoices = invoices.filter(invoice => {
     const matchesSearch = 
       invoice.invoice_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (invoice.notes?.toLowerCase() || '').includes(searchQuery.toLowerCase());
@@ -217,17 +172,31 @@ const Billing = () => {
 
   // Stats
   const stats = {
-    totalOutstanding: mockInvoices
+    totalOutstanding: invoices
       .filter(i => i.status === 'sent' || i.status === 'overdue')
-      .reduce((sum, i) => sum + (i.amount || 0), 0),
-    totalPaid: mockInvoices
+      .reduce((sum, i) => sum + (i.total_amount || i.amount || 0), 0),
+    totalPaid: invoices
       .filter(i => i.status === 'paid')
-      .reduce((sum, i) => sum + (i.amount || 0), 0),
-    overdueAmount: mockInvoices
+      .reduce((sum, i) => sum + (i.total_amount || i.amount || 0), 0),
+    overdueAmount: invoices
       .filter(i => i.status === 'overdue')
-      .reduce((sum, i) => sum + (i.amount || 0), 0),
-    invoiceCount: mockInvoices.length,
+      .reduce((sum, i) => sum + (i.total_amount || i.amount || 0), 0),
+    invoiceCount: invoices.length,
   };
+
+  // Mock payment methods (would come from payment API in production)
+  const paymentMethods = [
+    { id: '1', type: 'visa', last4: '4242', expiry: '12/27', default: true },
+    { id: '2', type: 'mastercard', last4: '8888', expiry: '08/26', default: false },
+  ];
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20">
@@ -253,9 +222,13 @@ const Billing = () => {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-slate-500">Total Outstanding</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                    ${stats.totalOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </p>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24 mt-1" />
+                  ) : (
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+                      ${stats.totalOutstanding.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
+                  )}
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
                   <DollarSign className="w-6 h-6 text-orange-500" />
@@ -269,9 +242,13 @@ const Billing = () => {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-slate-500">Total Paid (YTD)</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                    ${stats.totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </p>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24 mt-1" />
+                  ) : (
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+                      ${stats.totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
+                  )}
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
                   <TrendingUp className="w-6 h-6 text-green-500" />
@@ -285,9 +262,13 @@ const Billing = () => {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-slate-500">Overdue</p>
-                  <p className="text-2xl font-bold text-red-600 mt-1">
-                    ${stats.overdueAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                  </p>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24 mt-1" />
+                  ) : (
+                    <p className="text-2xl font-bold text-red-600 mt-1">
+                      ${stats.overdueAmount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </p>
+                  )}
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
                   <AlertCircle className="w-6 h-6 text-red-500" />
@@ -301,9 +282,13 @@ const Billing = () => {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-slate-500">Total Invoices</p>
-                  <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
-                    {stats.invoiceCount}
-                  </p>
+                  {isLoading ? (
+                    <Skeleton className="h-8 w-24 mt-1" />
+                  ) : (
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white mt-1">
+                      {stats.invoiceCount}
+                    </p>
+                  )}
                 </div>
                 <div className="w-12 h-12 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
                   <FileText className="w-6 h-6 text-blue-500" />
@@ -345,34 +330,44 @@ const Billing = () => {
             {/* Invoices Table */}
             <Card>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Invoice</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Status</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Issued</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Due</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Amount</th>
-                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredInvoices.map((invoice) => (
-                        <InvoiceRow key={invoice.id} invoice={invoice} />
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {filteredInvoices.length === 0 && (
-                  <div className="text-center py-12">
-                    <FileText className="w-12 h-12 mx-auto text-slate-300 mb-4" />
-                    <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
-                      No invoices found
-                    </h3>
-                    <p className="text-slate-500">Try adjusting your search or filters</p>
+                {isLoading ? (
+                  <div className="p-4 space-y-4">
+                    {[...Array(3)].map((_, i) => (
+                      <Skeleton key={i} className="h-16" />
+                    ))}
                   </div>
+                ) : (
+                  <>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Invoice</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Status</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Issued</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Due</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Amount</th>
+                            <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredInvoices.map((invoice) => (
+                            <InvoiceRow key={invoice.id} invoice={invoice} />
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {filteredInvoices.length === 0 && (
+                      <div className="text-center py-12">
+                        <FileText className="w-12 h-12 mx-auto text-slate-300 mb-4" />
+                        <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
+                          No invoices found
+                        </h3>
+                        <p className="text-slate-500">Try adjusting your search or filters</p>
+                      </div>
+                    )}
+                  </>
                 )}
               </CardContent>
             </Card>
@@ -431,20 +426,17 @@ const Billing = () => {
                 <div className="space-y-4">
                   <div>
                     <p className="text-sm text-slate-500 mb-1">Company Name</p>
-                    <p className="font-medium text-slate-900 dark:text-white">TechFlow Industries Ltd.</p>
+                    <p className="font-medium text-slate-900 dark:text-white">{user?.fullName || 'Not set'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-slate-500 mb-1">Billing Email</p>
+                    <p className="font-medium text-slate-900 dark:text-white">{user?.email || 'Not set'}</p>
                   </div>
                   <div>
                     <p className="text-sm text-slate-500 mb-1">Billing Address</p>
                     <p className="text-slate-700 dark:text-slate-300">
-                      1234 Innovation Drive<br />
-                      Suite 500<br />
-                      San Francisco, CA 94105<br />
-                      United States
+                      To be configured in profile settings
                     </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-slate-500 mb-1">Tax ID</p>
-                    <p className="font-medium text-slate-900 dark:text-white">US-12-3456789</p>
                   </div>
                 </div>
                 <Button variant="outline" className="w-full mt-4">

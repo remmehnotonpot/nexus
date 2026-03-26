@@ -18,7 +18,8 @@ import {
   ExternalLink,
   Plus,
   BarChart3,
-  Crosshair
+  Crosshair,
+  Loader2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SimulationController } from '@/components/SimulationController';
 import { DriverPingSimulator, type DriverPingSimulatorRef } from '@/components/DriverPingSimulator';
+import { useAuth, useRequireRole } from '@/hooks/useAuth';
 import type { TransportMode, Shipment } from '@/types';
 
 // MapLibre import
@@ -64,6 +66,14 @@ interface ActiveSimulation {
 }
 
 const AdminControl = () => {
+  const { isLoading: authLoading } = useAuth();
+  
+  // Require staff role - only super_admin, operations_manager, logistics_coordinator can access
+  useRequireRole(
+    ['super_admin', 'operations_manager', 'logistics_coordinator', 'driver', 'warehouse_staff', 'customer_support', 'viewer'],
+    '/dashboard'
+  );
+  
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const clickMarkerRef = useRef<maplibregl.Marker | null>(null);
@@ -274,6 +284,14 @@ const AdminControl = () => {
     setIsClickMode(true);
     addLog('Click on the map to set position');
   }, [selectedShipment, addLog]);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 pt-20 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 pt-20">

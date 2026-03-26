@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Package, 
@@ -17,12 +17,14 @@ import {
   MapPin,
   Calendar,
   MoreHorizontal,
-  ArrowUpDown
+  ArrowUpDown,
+  Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,232 +32,43 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusBadge } from '@/components/TransportMarker';
-import type { ShipmentStatus } from '@/types';
-
-// Transport mode type (excluding multimodal for icon mapping)
-type TransportModeWithIcon = 'air' | 'ocean' | 'road' | 'rail';
-
-// Address type for origin/destination
-interface Address {
-  city: string;
-  country: string;
-}
-
-// Shipment interface for this component (matching new schema)
-interface ShipmentView {
-  id: string;
-  tracking_number: string;
-  status: ShipmentStatus;
-  origin_address: Address;
-  origin_lat: number;
-  origin_lng: number;
-  destination_address: Address;
-  destination_lat: number;
-  destination_lng: number;
-  current_lat?: number;
-  current_lng?: number;
-  current_heading?: number;
-  transport_mode: TransportModeWithIcon;
-  delivery_date: string;
-  weight_kg: number;
-  volume_cbm: number;
-  cargo_description?: string;
-  created_at: string;
-  updated_at: string;
-}
-
-// Extended mock data
-const mockShipments: ShipmentView[] = [
-  {
-    id: '1',
-    tracking_number: 'NXS-78439201',
-    status: 'in_transit',
-    origin_address: { city: 'Shanghai', country: 'China' },
-    origin_lat: 31.23,
-    origin_lng: 121.47,
-    destination_address: { city: 'Los Angeles', country: 'USA' },
-    destination_lat: 34.05,
-    destination_lng: -118.24,
-    current_lat: 35,
-    current_lng: 160,
-    current_heading: 45,
-    transport_mode: 'ocean',
-    delivery_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-    weight_kg: 15000,
-    volume_cbm: 45.5,
-    cargo_description: 'Electronics - Consumer Goods',
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '2',
-    tracking_number: 'NXS-92345678',
-    status: 'customs',
-    origin_address: { city: 'Rotterdam', country: 'Netherlands' },
-    origin_lat: 51.92,
-    origin_lng: 4.48,
-    destination_address: { city: 'New York', country: 'USA' },
-    destination_lat: 40.71,
-    destination_lng: -74.01,
-    current_lat: 40.71,
-    current_lng: -74.01,
-    current_heading: 0,
-    transport_mode: 'ocean',
-    delivery_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-    weight_kg: 25000,
-    volume_cbm: 62.0,
-    cargo_description: 'Automotive Parts',
-    created_at: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '3',
-    tracking_number: 'NXS-11223344',
-    status: 'delivered',
-    origin_address: { city: 'Dubai', country: 'UAE' },
-    origin_lat: 25.20,
-    origin_lng: 55.27,
-    destination_address: { city: 'London', country: 'UK' },
-    destination_lat: 51.51,
-    destination_lng: -0.13,
-    current_lat: 51.51,
-    current_lng: -0.13,
-    current_heading: 0,
-    transport_mode: 'air',
-    delivery_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    weight_kg: 2500,
-    volume_cbm: 12.5,
-    cargo_description: 'Pharmaceuticals',
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '4',
-    tracking_number: 'NXS-55667788',
-    status: 'pending',
-    origin_address: { city: 'Hong Kong', country: 'China' },
-    origin_lat: 22.32,
-    origin_lng: 114.17,
-    destination_address: { city: 'Hamburg', country: 'Germany' },
-    destination_lat: 53.55,
-    destination_lng: 10.00,
-    current_lat: 22.32,
-    current_lng: 114.17,
-    current_heading: 0,
-    transport_mode: 'rail',
-    delivery_date: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString(),
-    weight_kg: 35000,
-    volume_cbm: 85.0,
-    cargo_description: 'Textiles & Garments',
-    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '5',
-    tracking_number: 'NXS-99887766',
-    status: 'out_for_delivery',
-    origin_address: { city: 'Singapore', country: 'Singapore' },
-    origin_lat: 1.35,
-    origin_lng: 103.82,
-    destination_address: { city: 'Sydney', country: 'Australia' },
-    destination_lat: -33.87,
-    destination_lng: 151.21,
-    current_lat: -33.87,
-    current_lng: 151.20,
-    current_heading: 90,
-    transport_mode: 'ocean',
-    delivery_date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
-    weight_kg: 18000,
-    volume_cbm: 52.0,
-    cargo_description: 'Machinery Equipment',
-    created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '6',
-    tracking_number: 'NXS-33445566',
-    status: 'exception',
-    origin_address: { city: 'Mumbai', country: 'India' },
-    origin_lat: 19.08,
-    origin_lng: 72.88,
-    destination_address: { city: 'Dubai', country: 'UAE' },
-    destination_lat: 25.20,
-    destination_lng: 55.27,
-    current_lat: 22.0,
-    current_lng: 64.0,
-    current_heading: 270,
-    transport_mode: 'air',
-    delivery_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    weight_kg: 5000,
-    volume_cbm: 25.0,
-    cargo_description: 'Perishable Goods',
-    created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '7',
-    tracking_number: 'NXS-77889900',
-    status: 'delivered',
-    origin_address: { city: 'Tokyo', country: 'Japan' },
-    origin_lat: 35.68,
-    origin_lng: 139.69,
-    destination_address: { city: 'Seoul', country: 'South Korea' },
-    destination_lat: 37.57,
-    destination_lng: 126.98,
-    current_lat: 37.57,
-    current_lng: 126.98,
-    current_heading: 0,
-    transport_mode: 'road',
-    delivery_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    weight_kg: 8000,
-    volume_cbm: 32.0,
-    cargo_description: 'Consumer Electronics',
-    created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-  {
-    id: '8',
-    tracking_number: 'NXS-44556677',
-    status: 'in_transit',
-    origin_address: { city: 'Sao Paulo', country: 'Brazil' },
-    origin_lat: -23.55,
-    origin_lng: -46.63,
-    destination_address: { city: 'Miami', country: 'USA' },
-    destination_lat: 25.76,
-    destination_lng: -80.19,
-    current_lat: 5.0,
-    current_lng: -35.0,
-    current_heading: 330,
-    transport_mode: 'ocean',
-    delivery_date: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
-    weight_kg: 42000,
-    volume_cbm: 98.5,
-    cargo_description: 'Agricultural Products',
-    created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  },
-];
+import { useAuth, useRequireAuth } from '@/hooks/useAuth';
+import { getShipments } from '@/lib/api/shipments';
+import type { Shipment, TransportMode } from '@/types';
 
 // Transport icon component
-const TransportIcon = ({ mode, className }: { mode: TransportModeWithIcon; className?: string }) => {
-  const icons: Record<TransportModeWithIcon, React.ElementType> = {
+const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: string }) => {
+  const icons: Record<TransportMode, React.ElementType> = {
     air: Plane,
     ocean: Ship,
     road: Truck,
     rail: Train,
+    multimodal: Ship,
   };
-  const Icon = icons[mode];
+  const Icon = icons[mode] || Ship;
   return <Icon className={className} />;
 };
 
+// Helper to get city from address
+const getCityFromAddress = (address: unknown): string => {
+  const addr = (address || {}) as Record<string, string>;
+  return addr.city || '';
+};
+
+// Helper to get country from address
+const getCountryFromAddress = (address: unknown): string => {
+  const addr = (address || {}) as Record<string, string>;
+  return addr.country || '';
+};
+
 // Shipment row component
-const ShipmentRow = ({ shipment }: { shipment: ShipmentView }) => {
+const ShipmentRow = ({ shipment }: { shipment: Shipment }) => {
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
       <td className="py-4 px-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-            <TransportIcon mode={shipment.transport_mode} className="w-5 h-5 text-slate-500" />
+            <TransportIcon mode={shipment.transport_mode as TransportMode} className="w-5 h-5 text-slate-500" />
           </div>
           <div>
             <Link 
@@ -272,8 +85,8 @@ const ShipmentRow = ({ shipment }: { shipment: ShipmentView }) => {
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-slate-400" />
           <div>
-            <p className="text-sm font-medium">{shipment.origin_address.city}</p>
-            <p className="text-xs text-slate-500">{shipment.origin_address.country}</p>
+            <p className="text-sm font-medium">{getCityFromAddress(shipment.origin_address)}</p>
+            <p className="text-xs text-slate-500">{getCountryFromAddress(shipment.origin_address)}</p>
           </div>
         </div>
       </td>
@@ -281,8 +94,8 @@ const ShipmentRow = ({ shipment }: { shipment: ShipmentView }) => {
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-orange-500" />
           <div>
-            <p className="text-sm font-medium">{shipment.destination_address.city}</p>
-            <p className="text-xs text-slate-500">{shipment.destination_address.country}</p>
+            <p className="text-sm font-medium">{getCityFromAddress(shipment.destination_address)}</p>
+            <p className="text-xs text-slate-500">{getCountryFromAddress(shipment.destination_address)}</p>
           </div>
         </div>
       </td>
@@ -292,12 +105,12 @@ const ShipmentRow = ({ shipment }: { shipment: ShipmentView }) => {
       <td className="py-4 px-4">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-slate-400" />
-          <span className="text-sm">{new Date(shipment.delivery_date).toLocaleDateString()}</span>
+          <span className="text-sm">{shipment.delivery_date ? new Date(shipment.delivery_date).toLocaleDateString() : '-'}</span>
         </div>
       </td>
       <td className="py-4 px-4">
-        <p className="text-sm">{shipment.weight_kg.toLocaleString()} kg</p>
-        <p className="text-xs text-slate-500">{shipment.volume_cbm} CBM</p>
+        <p className="text-sm">{(shipment.weight_kg || 0).toLocaleString()} kg</p>
+        <p className="text-xs text-slate-500">{shipment.volume_cbm || 0} CBM</p>
       </td>
       <td className="py-4 px-4">
         <DropdownMenu>
@@ -327,17 +140,44 @@ const ShipmentRow = ({ shipment }: { shipment: ShipmentView }) => {
 
 // Main Shipments Page
 const Shipments = () => {
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
 
+  // Require authentication
+  useRequireAuth();
+
+  // Fetch shipments
+  useEffect(() => {
+    const fetchShipments = async () => {
+      if (!user?.id) return;
+
+      setIsLoading(true);
+      try {
+        const data = await getShipments({ customerId: user.id });
+        setShipments(data);
+      } catch (error) {
+        console.error('Error fetching shipments:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (isAuthenticated && user?.id) {
+      fetchShipments();
+    }
+  }, [user?.id, isAuthenticated]);
+
   // Filter shipments
-  const filteredShipments = mockShipments.filter(shipment => {
+  const filteredShipments = shipments.filter(shipment => {
     const matchesSearch = 
       shipment.tracking_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      shipment.origin_address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      shipment.destination_address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getCityFromAddress(shipment.origin_address).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      getCityFromAddress(shipment.destination_address).toLowerCase().includes(searchQuery.toLowerCase()) ||
       (shipment.cargo_description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
     
     const matchesTab = 
@@ -358,11 +198,19 @@ const Shipments = () => {
 
   // Stats
   const stats = {
-    all: mockShipments.length,
-    active: mockShipments.filter(s => ['in_transit', 'customs', 'out_for_delivery', 'pending'].includes(s.status)).length,
-    delivered: mockShipments.filter(s => s.status === 'delivered').length,
-    delayed: mockShipments.filter(s => s.status === 'exception').length,
+    all: shipments.length,
+    active: shipments.filter(s => ['in_transit', 'customs', 'out_for_delivery', 'pending'].includes(s.status)).length,
+    delivered: shipments.filter(s => s.status === 'delivered').length,
+    delayed: shipments.filter(s => s.status === 'exception').length,
   };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-orange-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20">
@@ -378,9 +226,11 @@ const Shipments = () => {
               <Download className="w-4 h-4 mr-2" />
               Export
             </Button>
-            <Button className="bg-orange-500 hover:bg-orange-600">
-              <Plus className="w-4 h-4 mr-2" />
-              New Shipment
+            <Button className="bg-orange-500 hover:bg-orange-600" asChild>
+              <Link href="/shipments/new">
+                <Plus className="w-4 h-4 mr-2" />
+                New Shipment
+              </Link>
             </Button>
           </div>
         </div>
@@ -408,7 +258,7 @@ const Shipments = () => {
         </Card>
 
         {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
+        <Tabs value={activeTab} onValueChange={(value) => { setActiveTab(value); setCurrentPage(1); }} className="mb-6">
           <TabsList className="grid grid-cols-4 w-full max-w-md">
             <TabsTrigger value="all">
               All ({stats.all})
@@ -428,81 +278,91 @@ const Shipments = () => {
         {/* Shipments Table */}
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">
-                      <button className="flex items-center gap-1">
-                        Shipment
-                        <ArrowUpDown className="w-3 h-3" />
-                      </button>
-                    </th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Origin</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Destination</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Status</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">ETA</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Details</th>
-                    <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedShipments.map((shipment) => (
-                    <ShipmentRow key={shipment.id} shipment={shipment} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Empty state */}
-            {paginatedShipments.length === 0 && (
-              <div className="text-center py-12">
-                <Package className="w-12 h-12 mx-auto text-slate-300 mb-4" />
-                <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
-                  No shipments found
-                </h3>
-                <p className="text-slate-500">
-                  Try adjusting your search or filters
-                </p>
+            {isLoading ? (
+              <div className="p-4 space-y-4">
+                {[...Array(5)].map((_, i) => (
+                  <Skeleton key={i} className="h-16" />
+                ))}
               </div>
-            )}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-4 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-sm text-slate-500">
-                  Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredShipments.length)} of {filteredShipments.length} shipments
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className={currentPage === page ? 'bg-orange-500 hover:bg-orange-600' : ''}
-                    >
-                      {page}
-                    </Button>
-                  ))}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
+                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">
+                          <button className="flex items-center gap-1">
+                            Shipment
+                            <ArrowUpDown className="w-3 h-3" />
+                          </button>
+                        </th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Origin</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Destination</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Status</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">ETA</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Details</th>
+                        <th className="text-left py-3 px-4 text-sm font-medium text-slate-500">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedShipments.map((shipment) => (
+                        <ShipmentRow key={shipment.id} shipment={shipment} />
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              </div>
+
+                {/* Empty state */}
+                {paginatedShipments.length === 0 && (
+                  <div className="text-center py-12">
+                    <Package className="w-12 h-12 mx-auto text-slate-300 mb-4" />
+                    <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
+                      No shipments found
+                    </h3>
+                    <p className="text-slate-500">
+                      Try adjusting your search or filters
+                    </p>
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between px-4 py-4 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-sm text-slate-500">
+                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredShipments.length)} of {filteredShipments.length} shipments
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                        <Button
+                          key={page}
+                          variant={currentPage === page ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setCurrentPage(page)}
+                          className={currentPage === page ? 'bg-orange-500 hover:bg-orange-600' : ''}
+                        >
+                          {page}
+                        </Button>
+                      ))}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

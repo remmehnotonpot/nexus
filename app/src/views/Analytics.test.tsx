@@ -3,6 +3,23 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Analytics } from './Analytics';
 import { createMockShipment } from '@/test/mocks/data';
 
+// Mock the auth hook
+vi.mock('@/hooks/useAuth', () => ({
+  useAuth: vi.fn(() => ({
+    user: { id: 'test-user', email: 'test@example.com', role: 'customer', fullName: 'Test User' },
+    profile: { id: 'test-user', role: 'customer', full_name: 'Test User' },
+    isLoading: false,
+    isAuthenticated: true,
+    login: vi.fn(),
+    logout: vi.fn(),
+    register: vi.fn(),
+    hasRole: vi.fn(() => true),
+    isStaff: vi.fn(() => false),
+    refreshProfile: vi.fn(),
+  })),
+  useRequireAuth: vi.fn(),
+}));
+
 // Mock the supabase client
 vi.mock('@/lib/supabase', () => ({
   supabase: {
