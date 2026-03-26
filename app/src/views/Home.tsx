@@ -32,6 +32,10 @@ import { Badge } from '@/components/ui/badge';
 import { FadeIn } from '@/components/animations/FadeIn';
 import { StaggerContainer, StaggerItem } from '@/components/animations/StaggerContainer';
 
+// Horizontal scroll container styles for mobile
+const horizontalScrollClasses = "flex md:grid overflow-x-auto md:overflow-visible gap-4 md:gap-6 pb-4 md:pb-0 snap-x snap-mandatory scrollbar-hide";
+const horizontalScrollItemClasses = "flex-shrink-0 snap-start w-[85vw] sm:w-[45vw] md:w-auto";
+
 // Hero Section
 const HeroSection = () => {
   const [trackingNumber, setTrackingNumber] = useState('');
@@ -243,25 +247,26 @@ const WhyChooseUsSection = () => {
           </p>
         </FadeIn>
 
-        <StaggerContainer className="grid md:grid-cols-3 gap-8" staggerDelay={0.15}>
+        <StaggerContainer className={`${horizontalScrollClasses} md:grid-cols-3`} staggerDelay={0.15}>
           {features.map((feature) => (
-            <StaggerItem key={feature.title}>
+            <StaggerItem key={feature.title} className={horizontalScrollItemClasses}>
               <motion.div
                 whileHover={{ y: -8 }}
                 transition={{ type: "spring", stiffness: 300 }}
+                className="h-full"
               >
                 <Card className="group hover:shadow-xl transition-all duration-300 border-slate-200 dark:border-slate-800 h-full">
-                  <CardContent className="p-8 text-center">
+                  <CardContent className="p-6 md:p-8 text-center">
                     <motion.div 
-                      className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center group-hover:bg-sky-500 transition-colors"
+                      className="w-14 h-14 md:w-16 md:h-16 mx-auto mb-4 md:mb-6 rounded-2xl bg-sky-100 dark:bg-sky-900/30 flex items-center justify-center group-hover:bg-sky-500 transition-colors"
                       whileHover={{ rotate: 5, scale: 1.05 }}
                     >
-                      <feature.icon className="w-8 h-8 text-sky-500 group-hover:text-white transition-colors" />
+                      <feature.icon className="w-7 h-7 md:w-8 md:h-8 text-sky-500 group-hover:text-white transition-colors" />
                     </motion.div>
-                    <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-3">
+                    <h3 className="text-lg md:text-xl font-semibold text-slate-900 dark:text-white mb-2 md:mb-3">
                       {feature.title}
                     </h3>
-                    <p className="text-slate-600 dark:text-slate-400">
+                    <p className="text-sm md:text-base text-slate-600 dark:text-slate-400">
                       {feature.description}
                     </p>
                   </CardContent>
@@ -407,12 +412,12 @@ const ServicesGridSection = () => {
           </p>
         </FadeIn>
 
-        <StaggerContainer className="grid md:grid-cols-2 gap-6" staggerDelay={0.15}>
+        <StaggerContainer className={`${horizontalScrollClasses} md:grid-cols-2`} staggerDelay={0.15}>
           {services.map((service) => (
-            <StaggerItem key={service.title}>
+            <StaggerItem key={service.title} className={horizontalScrollItemClasses}>
               <Link href="/services">
                 <motion.div 
-                  className="group relative h-80 rounded-2xl overflow-hidden cursor-pointer"
+                  className="group relative h-64 sm:h-72 md:h-80 rounded-2xl overflow-hidden cursor-pointer"
                   whileHover={{ scale: 1.02 }}
                   transition={{ type: "spring", stiffness: 200 }}
                 >
@@ -425,21 +430,21 @@ const ServicesGridSection = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-slate-900/50 to-transparent" />
                   
-                  <div className="absolute bottom-0 left-0 right-0 p-6">
-                    <h3 className="text-xl font-semibold text-white mb-2 group-hover:text-sky-400 transition-colors">
+                  <div className="absolute bottom-0 left-0 right-0 p-4 md:p-6">
+                    <h3 className="text-lg md:text-xl font-semibold text-white mb-1 md:mb-2 group-hover:text-sky-400 transition-colors">
                       {service.title}
                     </h3>
-                    <p className="text-slate-300 text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                    <p className="text-slate-300 text-xs md:text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                       {service.description}
                     </p>
                   </div>
 
                   <motion.div 
-                    className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center"
+                    className="absolute top-3 md:top-4 right-3 md:right-4 w-8 h-8 md:w-10 md:h-10 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center"
                     initial={{ opacity: 0, scale: 0.8 }}
                     whileHover={{ opacity: 1, scale: 1 }}
                   >
-                    <ArrowRight className="w-5 h-5 text-white" />
+                    <ArrowRight className="w-4 h-4 md:w-5 md:h-5 text-white" />
                   </motion.div>
                 </motion.div>
               </Link>
@@ -489,11 +494,11 @@ const SafetySection = () => {
           </p>
         </FadeIn>
 
-        <StaggerContainer className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6" staggerDelay={0.08}>
+        <StaggerContainer className={`${horizontalScrollClasses} sm:grid-cols-2 lg:grid-cols-4`} staggerDelay={0.08}>
           {features.map((feature) => (
-            <StaggerItem key={feature.title}>
+            <StaggerItem key={feature.title} className={horizontalScrollItemClasses}>
               <motion.div
-                className="group p-6 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-sky-50 dark:hover:bg-sky-900/10 transition-all cursor-pointer h-full"
+                className="group p-4 md:p-6 rounded-xl bg-slate-50 dark:bg-slate-800/50 hover:bg-sky-50 dark:hover:bg-sky-900/10 transition-all cursor-pointer h-full"
                 whileHover={{ y: -5, scale: 1.02 }}
                 transition={{ type: "spring", stiffness: 300 }}
               >
@@ -501,12 +506,12 @@ const SafetySection = () => {
                   whileHover={{ rotate: 10, scale: 1.1 }}
                   transition={{ type: "spring", stiffness: 300 }}
                 >
-                  <feature.icon className="w-8 h-8 text-sky-500 mb-4 group-hover:scale-110 transition-transform" />
+                  <feature.icon className="w-7 h-7 md:w-8 md:h-8 text-sky-500 mb-3 md:mb-4 group-hover:scale-110 transition-transform" />
                 </motion.div>
-                <h3 className="font-semibold text-slate-900 dark:text-white mb-2">
+                <h3 className="text-sm md:text-base font-semibold text-slate-900 dark:text-white mb-1 md:mb-2">
                   {feature.title}
                 </h3>
-                <p className="text-sm text-slate-600 dark:text-slate-400">
+                <p className="text-xs md:text-sm text-slate-600 dark:text-slate-400">
                   {feature.desc}
                 </p>
               </motion.div>
