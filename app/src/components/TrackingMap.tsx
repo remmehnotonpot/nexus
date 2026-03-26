@@ -19,7 +19,16 @@ interface TrackingMapProps {
   isLive?: boolean;
   className?: string;
   mapStyle?: keyof typeof OPENFREEMAP_STYLES;
+  /** Target position for smooth interpolation (from useLiveTracking) */
+  targetPosition?: [number, number] | null;
+  /** Current heading for marker rotation */
+  heading?: number;
 }
+
+// Animation configuration
+const ANIMATION_DURATION_MS = 1500; // 1.5 seconds for smooth movement
+const BOUNDS_PADDING = 100; // Padding in pixels when fitting bounds
+const EDGE_THRESHOLD_PERCENT = 0.2; // 20% of viewport triggers re-centering
 
 export const TrackingMap = ({
   shipment,
@@ -27,11 +36,20 @@ export const TrackingMap = ({
   isLive = false,
   className = '',
   mapStyle = 'positron',
+  targetPosition,
+  heading = 0,
 }: TrackingMapProps) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  
+  // Animation refs
+  const animationFrameRef = useRef<number | null>(null);
+  const currentPositionRef = useRef<[number, number] | null>(null);
+  const targetPositionRef = useRef<[number, number] | null>(null);
+  const animationStartTimeRef = useRef<number | null>(null);
+  const animationStartPositionRef = useRef<[number, number] | null>(null);
 
   // Initialize map
   useEffect(() => {
@@ -102,62 +120,192 @@ export const TrackingMap = ({
     map.current = newMap;
 
     return () => {
+      // Cancel any ongoing animation
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
       newMap.remove();
     };
   }, [mapStyle]);
 
-  // Update marker position and rotation
-  const updateMarker = useCallback((lat: number, lng: number, heading: number, mode: TransportMode) => {
-    if (!map.current) return;
+  /**
+   * Easing function for smooth movement (ease-in-out-cubic)
+   */
+  const easeInOutCubic = (t: number): number => {
+    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+  };
 
-    // Remove existing marker
-    if (markerRef.current) {
-      markerRef.current.remove();
+  /**
+   * Linear interpolation between two coordinates
+   */
+  const interpolatePosition = (
+    start: [number, number],
+    end: [number, number],
+    progress: number
+  ): [number, number] => {
+    return [
+      start[0] + (end[0] - start[0]) * progress,
+      start[1] + (end[1] - start[1]) * progress,
+    ];
+  };
+
+  /**
+   * Check if marker is near the edge of the viewport
+   */
+  const isNearEdge = useCallback((lngLat: maplibregl.LngLat): boolean => {
+    if (!map.current) return false;
+
+    const bounds = map.current.getBounds();
+    const viewportWidth = bounds.getEast() - bounds.getWest();
+    const viewportHeight = bounds.getNorth() - bounds.getSouth();
+
+    const edgeThresholdX = viewportWidth * EDGE_THRESHOLD_PERCENT;
+    const edgeThresholdY = viewportHeight * EDGE_THRESHOLD_PERCENT;
+
+    const isNearWestEdge = lngLat.lng < bounds.getWest() + edgeThresholdX;
+    const isNearEastEdge = lngLat.lng > bounds.getEast() - edgeThresholdX;
+    const isNearSouthEdge = lngLat.lat < bounds.getSouth() + edgeThresholdY;
+    const isNearNorthEdge = lngLat.lat > bounds.getNorth() - edgeThresholdY;
+
+    return isNearWestEdge || isNearEastEdge || isNearSouthEdge || isNearNorthEdge;
+  }, []);
+
+  /**
+   * Animation loop for smooth marker movement
+   */
+  const animateMarker = useCallback((timestamp: number) => {
+    if (!animationStartTimeRef.current) {
+      animationStartTimeRef.current = timestamp;
     }
 
-    // Create custom marker element
+    const elapsed = timestamp - animationStartTimeRef.current;
+    const progress = Math.min(elapsed / ANIMATION_DURATION_MS, 1);
+    const easedProgress = easeInOutCubic(progress);
+
+    if (animationStartPositionRef.current && targetPositionRef.current && map.current) {
+      // Interpolate position
+      const newPosition = interpolatePosition(
+        animationStartPositionRef.current,
+        targetPositionRef.current,
+        easedProgress
+      );
+
+      // Update marker position
+      if (markerRef.current) {
+        markerRef.current.setLngLat([newPosition[1], newPosition[0]]);
+      }
+
+      // Update current position ref
+      currentPositionRef.current = newPosition;
+
+      // Check if marker is near edge and pan map if needed
+      if (isNearEdge(new maplibregl.LngLat(newPosition[1], newPosition[0]))) {
+        map.current.panTo([newPosition[1], newPosition[0]], {
+          duration: 500,
+          easing: easeInOutCubic,
+        });
+      }
+    }
+
+    if (progress < 1) {
+      animationFrameRef.current = requestAnimationFrame(animateMarker);
+    } else {
+      // Animation complete
+      animationStartTimeRef.current = null;
+      animationFrameRef.current = null;
+    }
+  }, [isNearEdge]);
+
+  /**
+   * Create or update marker with smooth interpolation
+   */
+  const updateMarker = useCallback((
+    lat: number, 
+    lng: number, 
+    markerHeading: number, 
+    mode: TransportMode,
+    animate: boolean = true
+  ) => {
+    if (!map.current) return;
+
+    // Cancel any ongoing animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    // If no marker exists, create one immediately (no animation on initial load)
+    if (!markerRef.current) {
+      const markerEl = createMarkerElement(markerHeading, mode);
+      
+      const marker = new maplibregl.Marker({
+        element: markerEl,
+        anchor: 'center',
+        rotation: markerHeading,
+        rotationAlignment: 'map',
+      })
+        .setLngLat([lng, lat])
+        .addTo(map.current);
+
+      markerRef.current = marker;
+      currentPositionRef.current = [lat, lng];
+      targetPositionRef.current = [lat, lng];
+
+      // Initial flyTo
+      map.current.flyTo({
+        center: [lng, lat],
+        zoom: 5,
+        duration: 1000,
+      });
+
+      return;
+    }
+
+    // Update marker rotation
+    markerRef.current.setRotation(markerHeading);
+
+    // Update marker icon if needed (for transport mode changes)
+    const markerEl = markerRef.current.getElement();
+    const iconContainer = markerEl.querySelector('.transport-icon');
+    if (iconContainer) {
+      iconContainer.innerHTML = getTransportIconSvg(mode);
+    }
+
+    if (animate && currentPositionRef.current) {
+      // Start smooth animation to new position
+      animationStartPositionRef.current = [...currentPositionRef.current];
+      targetPositionRef.current = [lat, lng];
+      animationStartTimeRef.current = null;
+      animationFrameRef.current = requestAnimationFrame(animateMarker);
+    } else {
+      // Immediate update (no animation)
+      markerRef.current.setLngLat([lng, lat]);
+      currentPositionRef.current = [lat, lng];
+      targetPositionRef.current = [lat, lng];
+    }
+  }, [animateMarker]);
+
+  /**
+   * Create marker DOM element
+   */
+  const createMarkerElement = (rotation: number, mode: TransportMode): HTMLElement => {
     const markerEl = document.createElement('div');
     markerEl.className = 'relative';
     markerEl.style.width = '48px';
     markerEl.style.height = '48px';
 
-    // Create marker content
-    const root = document.createElement('div');
-    root.className = 'w-full h-full';
-    markerEl.appendChild(root);
-
-    // Create marker
-    const marker = new maplibregl.Marker({
-      element: markerEl,
-      anchor: 'center',
-      rotation: heading,
-      rotationAlignment: 'map',
-    })
-      .setLngLat([lng, lat])
-      .addTo(map.current);
-
-    markerRef.current = marker;
-
-    // Set marker content
-    const markerContent = document.createElement('div');
-    markerContent.innerHTML = `
-      <div class="relative flex items-center justify-center text-[#FF6B00]" style="width: 48px; height: 48px; transform: rotate(${heading}deg);">
+    markerEl.innerHTML = `
+      <div class="relative flex items-center justify-center text-[#FF6B00]" style="width: 48px; height: 48px;">
         <div class="absolute inset-0 rounded-full bg-current opacity-20 animate-ping"></div>
-        <div class="relative z-10 w-3/4 h-3/4">
+        <div class="relative z-10 w-3/4 h-3/4 transport-icon">
           ${getTransportIconSvg(mode)}
         </div>
         <div class="absolute w-2 h-2 bg-current rounded-full"></div>
       </div>
     `;
-    root.appendChild(markerContent);
 
-    // Fly to marker
-    map.current.flyTo({
-      center: [lng, lat],
-      zoom: 5,
-      duration: 1000,
-    });
-  }, []);
+    return markerEl;
+  };
 
   // Update route line
   const updateRouteLine = useCallback((coordinates: [number, number][]) => {
@@ -176,16 +324,17 @@ export const TrackingMap = ({
     }
   }, [mapLoaded]);
 
-  // Update map when shipment data changes
+  // Initial setup when shipment data changes
   useEffect(() => {
     if (!shipment || !map.current || !mapLoaded) return;
 
     const lat = shipment.current_lat ?? shipment.current.lat;
     const lng = shipment.current_lng ?? shipment.current.lng;
-    const heading = shipment.current_heading ?? shipment.current.heading;
+    const shipmentHeading = shipment.current_heading ?? shipment.current.heading;
 
     if (lat && lng) {
-      updateMarker(lat, lng, heading, shipment.transport_mode);
+      // Initial marker creation (no animation)
+      updateMarker(lat, lng, shipmentHeading, shipment.transport_mode, false);
     }
 
     // Build route from tracking history
@@ -202,16 +351,34 @@ export const TrackingMap = ({
 
       updateRouteLine(routeCoords);
 
-      // Fit bounds to show entire route
+      // Fit bounds to show entire route (only on initial load)
       const bounds = new maplibregl.LngLatBounds();
       routeCoords.forEach(coord => bounds.extend(coord));
       
+      // Include origin and destination
+      bounds.extend([shipment.origin.lng, shipment.origin.lat]);
+      bounds.extend([shipment.destination.lng, shipment.destination.lat]);
+
       map.current.fitBounds(bounds, {
-        padding: 100,
+        padding: BOUNDS_PADDING,
         duration: 1000,
       });
     }
   }, [shipment, trackingHistory, mapLoaded, updateMarker, updateRouteLine]);
+
+  // Handle live position updates with smooth interpolation
+  useEffect(() => {
+    if (!shipment || !map.current || !mapLoaded || !targetPosition) return;
+
+    const [targetLat, targetLng] = targetPosition;
+    const currentLat = currentPositionRef.current?.[0] ?? shipment.current_lat ?? shipment.current.lat;
+    const currentLng = currentPositionRef.current?.[1] ?? shipment.current_lng ?? shipment.current.lng;
+
+    // Only update if position has actually changed
+    if (targetLat !== currentLat || targetLng !== currentLng) {
+      updateMarker(targetLat, targetLng, heading, shipment.transport_mode, true);
+    }
+  }, [targetPosition, heading, shipment, mapLoaded, updateMarker]);
 
   // Helper function to get transport icon SVG
   const getTransportIconSvg = (mode: TransportMode): string => {

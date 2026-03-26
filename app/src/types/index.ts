@@ -98,6 +98,15 @@ export type NotificationType =
   | 'customs-hold' 
   | 'payment-due';
 
+export interface StatusChangeEvent {
+  previousStatus: ShipmentStatus;
+  newStatus: ShipmentStatus;
+  shipmentId: string;
+  trackingNumber: string;
+  timestamp: Date;
+  location?: string;
+}
+
 export interface SimulationPath {
   id: string;
   name: string;

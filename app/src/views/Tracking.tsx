@@ -16,88 +16,19 @@ import {
   Share2,
   Printer,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  AlertCircle,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import { TrackingMap } from '@/components/TrackingMap';
 import { StatusBadge, LiveBadge } from '@/components/TransportMarker';
-import type { Shipment, TrackingLog, TransportMode } from '@/types';
-
-// Mock data for demonstration
-const mockShipment: Shipment = {
-  id: 'demo-1',
-  tracking_number: 'NXS-DEMO-001',
-  status: 'in-transit',
-  origin: {
-    lat: 31.2304,
-    lng: 121.4737,
-    city: 'Shanghai',
-    country: 'China',
-  },
-  destination: {
-    lat: 34.0522,
-    lng: -118.2437,
-    city: 'Los Angeles',
-    country: 'USA',
-  },
-  current: {
-    lat: 35.0,
-    lng: 160.0,
-    heading: 45,
-  },
-  current_lat: 35.0,
-  current_lng: 160.0,
-  current_heading: 45,
-  transport_mode: 'ocean',
-  is_live_demo: true,
-  estimated_arrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-  weight_kg: 15000,
-  volume_cbm: 45.5,
-  goods_description: 'Electronics - Consumer Goods',
-  created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
-const mockTrackingHistory: TrackingLog[] = [
-  {
-    id: '1',
-    shipment_id: 'demo-1',
-    lat: 31.2304,
-    lng: 121.4737,
-    timestamp: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-    location_name: 'Shanghai Port, China',
-    event_type: 'departure',
-  },
-  {
-    id: '2',
-    shipment_id: 'demo-1',
-    lat: 32.0,
-    lng: 125.0,
-    timestamp: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
-    location_name: 'East China Sea',
-    event_type: 'location-update',
-  },
-  {
-    id: '3',
-    shipment_id: 'demo-1',
-    lat: 35.0,
-    lng: 140.0,
-    timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    location_name: 'Pacific Ocean',
-    event_type: 'location-update',
-  },
-  {
-    id: '4',
-    shipment_id: 'demo-1',
-    lat: 35.0,
-    lng: 160.0,
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    location_name: 'International Date Line',
-    event_type: 'checkpoint',
-  },
-];
+import { useLiveTracking } from '@/hooks/useLiveTracking';
+import type { TrackingLog, TransportMode } from '@/types';
 
 // Timeline component
 const TrackingTimeline = ({ history }: { history: TrackingLog[] }) => {
@@ -157,7 +88,7 @@ const TrackingTimeline = ({ history }: { history: TrackingLog[] }) => {
               </span>
             </div>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              {event.location_name}
+              {event.location_name || `${event.lat.toFixed(4)}, ${event.lng.toFixed(4)}`}
             </p>
           </div>
         </div>
@@ -178,6 +109,32 @@ const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: s
   return <Icon className={className} />;
 };
 
+// Connection status badge
+const ConnectionStatusBadge = ({ status }: { status: string }) => {
+  const styles: Record<string, string> = {
+    connected: 'bg-green-500/10 text-green-500 border-green-500/30',
+    connecting: 'bg-yellow-500/10 text-yellow-500 border-yellow-500/30',
+    disconnected: 'bg-slate-500/10 text-slate-500 border-slate-500/30',
+    error: 'bg-red-500/10 text-red-500 border-red-500/30',
+  };
+
+  const icons: Record<string, React.ElementType> = {
+    connected: Wifi,
+    connecting: RefreshCw,
+    disconnected: WifiOff,
+    error: AlertCircle,
+  };
+
+  const Icon = icons[status] || WifiOff;
+
+  return (
+    <Badge variant="outline" className={`${styles[status] || styles.disconnected} text-xs`}>
+      <Icon className={`w-3 h-3 mr-1 ${status === 'connecting' ? 'animate-spin' : ''}`} />
+      {status.charAt(0).toUpperCase() + status.slice(1)}
+    </Badge>
+  );
+};
+
 // Main Tracking Page
 interface TrackingProps {
   initialTrackingId?: string;
@@ -186,35 +143,25 @@ interface TrackingProps {
 const Tracking = ({ initialTrackingId }: TrackingProps) => {
   const router = useRouter();
   const [trackingNumber, setTrackingNumber] = useState(initialTrackingId || '');
-  const [shipment, setShipment] = useState<Shipment | null>(initialTrackingId ? mockShipment : null);
-  const [trackingHistory] = useState<TrackingLog[]>(initialTrackingId ? mockTrackingHistory : []);
-  const [loading, setLoading] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
-  const [isLive] = useState(true);
 
-  // Simulate fetching shipment data
-  const fetchShipment = useCallback(async (trackingNum: string) => {
-    setLoading(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    if (trackingNum.toUpperCase().startsWith('NXS-')) {
-      setShipment(mockShipment);
-    } else {
-      setShipment(null);
-    }
-    setLoading(false);
-  }, []);
+  // Use the new live tracking hook
+  const {
+    shipment,
+    currentPosition,
+    heading,
+    trackingHistory,
+    isLoading,
+    error,
+    connectionStatus,
+    lastUpdateTime,
+    refresh,
+  } = useLiveTracking(initialTrackingId || null);
 
+  // Update tracking number when initialTrackingId changes
   useEffect(() => {
     setTrackingNumber(initialTrackingId || '');
-
-    if (initialTrackingId) {
-      fetchShipment(initialTrackingId);
-    } else {
-      setShipment(null);
-    }
-  }, [initialTrackingId, fetchShipment]);
+  }, [initialTrackingId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -222,6 +169,8 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
       router.push(`/tracking/${trackingNumber.trim()}`);
     }
   };
+
+  const isLive = connectionStatus === 'connected';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20">
@@ -249,8 +198,8 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                 />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               </div>
-              <Button type="submit" disabled={loading}>
-                {loading ? (
+              <Button type="submit" disabled={isLoading || !trackingNumber.trim()}>
+                {isLoading ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
                   'Track'
@@ -270,6 +219,8 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
               shipment={shipment}
               trackingHistory={trackingHistory}
               isLive={isLive}
+              targetPosition={currentPosition}
+              heading={heading}
               className="h-full"
             />
           </div>
@@ -282,6 +233,9 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm text-slate-500">Tracking Number</span>
                   <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={refresh}>
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8">
                       <Share2 className="w-4 h-4" />
                     </Button>
@@ -298,6 +252,19 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                   {isLive && <LiveBadge />}
                 </div>
               </div>
+
+              {/* Connection status */}
+              <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                <span className="text-sm text-slate-500">Connection</span>
+                <ConnectionStatusBadge status={connectionStatus} />
+              </div>
+
+              {/* Last update time */}
+              {lastUpdateTime && (
+                <div className="text-xs text-slate-400 text-right">
+                  Last update: {lastUpdateTime.toLocaleTimeString()}
+                </div>
+              )}
 
               <Separator />
 
@@ -358,6 +325,16 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                 </div>
               </div>
 
+              {/* Current position */}
+              {currentPosition && (
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                  <div className="text-sm text-slate-500 mb-1">Current Position</div>
+                  <div className="font-mono text-sm text-slate-900 dark:text-white">
+                    {currentPosition[0].toFixed(6)}, {currentPosition[1].toFixed(6)}
+                  </div>
+                </div>
+              )}
+
               {/* Shipment details toggle */}
               <Button
                 variant="outline"
@@ -404,18 +381,34 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
           </div>
         </div>
       ) : (
-        /* Empty state */
+        /* Empty state or error state */
         <div className="flex-1 flex items-center justify-center p-8">
           <div className="text-center max-w-md">
-            <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-              <Package className="w-10 h-10 text-slate-400" />
-            </div>
-            <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
-              Enter a Tracking Number
-            </h2>
-            <p className="text-slate-500 mb-6">
-              Enter your tracking number above to see real-time updates on your shipment&apos;s location and status.
-            </p>
+            {error ? (
+              <>
+                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center">
+                  <AlertCircle className="w-10 h-10 text-red-500" />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                  Shipment Not Found
+                </h2>
+                <p className="text-slate-500 mb-6">
+                  {error}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                  <Package className="w-10 h-10 text-slate-400" />
+                </div>
+                <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+                  Enter a Tracking Number
+                </h2>
+                <p className="text-slate-500 mb-6">
+                  Enter your tracking number above to see real-time updates on your shipment&apos;s location and status.
+                </p>
+              </>
+            )}
             <div className="text-sm text-slate-400">
               <p className="mb-2">Try these demo tracking numbers:</p>
               <div className="flex flex-wrap justify-center gap-2">

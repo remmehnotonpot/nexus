@@ -17,14 +17,16 @@ import {
   X,
   ExternalLink,
   Plus,
-  BarChart3
+  BarChart3,
+  Crosshair
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SimulationController } from '@/components/SimulationController';
-import type { TransportMode } from '@/types';
+import { DriverPingSimulator, type DriverPingSimulatorRef } from '@/components/DriverPingSimulator';
+import type { TransportMode, Shipment } from '@/types';
 
 // MapLibre import
 import maplibregl from 'maplibre-gl';
@@ -63,13 +65,22 @@ interface ActiveSimulation {
 const AdminControl = () => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<maplibregl.Map | null>(null);
-  const markerRef = useRef<maplibregl.Marker | null>(null);
+  const clickMarkerRef = useRef<maplibregl.Marker | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapStyle, setMapStyle] = useState<MapStyle>('positron');
   
   // Active simulations list
   const [activeSimulations, setActiveSimulations] = useState<ActiveSimulation[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
+  
+  // Selected shipment for driver ping
+  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+  
+  // Click mode for map
+  const [isClickMode, setIsClickMode] = useState(false);
+
+  // Driver ping simulator ref to call methods
+  const driverPingRef = useRef<DriverPingSimulatorRef | null>(null);
 
   // Initialize map
   useEffect(() => {
@@ -135,12 +146,52 @@ const AdminControl = () => {
       }, 'route-line');
     });
 
+    // Handle map click for driver ping mode
+    newMap.on('click', (e) => {
+      if (isClickMode && selectedShipment) {
+        const { lng, lat } = e.lngLat;
+        
+        // Add or update click marker
+        if (clickMarkerRef.current) {
+          clickMarkerRef.current.remove();
+        }
+
+        const markerEl = document.createElement('div');
+        markerEl.className = 'w-6 h-6 rounded-full bg-orange-500 border-2 border-white shadow-lg animate-pulse';
+        
+        clickMarkerRef.current = new maplibregl.Marker({
+          element: markerEl,
+          anchor: 'center',
+        })
+          .setLngLat([lng, lat])
+          .addTo(newMap);
+
+        // Update driver ping form
+        driverPingRef.current?.setCoordinatesFromMap(lat, lng);
+        
+        addLog(`Map click: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+        
+        // Exit click mode
+        setIsClickMode(false);
+        
+        // Restore default cursor
+        newMap.getCanvas().style.cursor = '';
+      }
+    });
+
+    // Update cursor in click mode
+    newMap.on('mousemove', (e) => {
+      if (isClickMode) {
+        newMap.getCanvas().style.cursor = 'crosshair';
+      }
+    });
+
     map.current = newMap;
 
     return () => {
       newMap.remove();
     };
-  }, []);
+  }, [mapStyle, isClickMode, selectedShipment]);
 
   // Update map style when changed
   useEffect(() => {
@@ -148,9 +199,52 @@ const AdminControl = () => {
     map.current.setStyle(OPENFREEMAP_STYLES[mapStyle]);
   }, [mapStyle]);
 
+  // Update cursor when click mode changes
+  useEffect(() => {
+    if (!map.current) return;
+    map.current.getCanvas().style.cursor = isClickMode ? 'crosshair' : '';
+  }, [isClickMode]);
+
   // Handle shipment created from SimulationController
   const handleShipmentCreated = useCallback((shipmentId: string, trackingNumber: string) => {
     addLog(`New shipment created: ${trackingNumber}`);
+    
+    // Create a mock shipment object for the driver ping simulator
+    // In a real app, you'd fetch the full shipment data
+    setSelectedShipment({
+      id: shipmentId,
+      tracking_number: trackingNumber,
+      status: 'in-transit',
+      origin: { lat: 31.2304, lng: 121.4737, city: 'Shanghai', country: 'China' },
+      destination: { lat: 34.0522, lng: -118.2437, city: 'Los Angeles', country: 'USA' },
+      current: { lat: 31.2304, lng: 121.4737, heading: 45 },
+      current_lat: 31.2304,
+      current_lng: 121.4737,
+      current_heading: 45,
+      transport_mode: 'ocean',
+      is_live_demo: true,
+      estimated_arrival: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+  }, []);
+
+  // Handle location update from driver ping
+  const handleLocationUpdate = useCallback((lat: number, lng: number) => {
+    addLog(`Driver ping sent: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+    
+    // Update map marker if exists
+    if (clickMarkerRef.current && map.current) {
+      // Change marker style to indicate sent
+      const markerEl = clickMarkerRef.current.getElement();
+      markerEl.className = 'w-6 h-6 rounded-full bg-green-500 border-2 border-white shadow-lg';
+      
+      // Fade out after delay
+      setTimeout(() => {
+        clickMarkerRef.current?.remove();
+        clickMarkerRef.current = null;
+      }, 3000);
+    }
   }, []);
 
   // Add log entry
@@ -166,6 +260,16 @@ const AdminControl = () => {
     setActiveSimulations(prev => prev.filter(sim => sim.id !== id));
     addLog(`Removed simulation: ${id}`);
   }, [addLog]);
+
+  // Enable map click mode
+  const enableMapClickMode = useCallback(() => {
+    if (!selectedShipment) {
+      addLog('Error: No shipment selected for driver ping');
+      return;
+    }
+    setIsClickMode(true);
+    addLog('Click on the map to set position');
+  }, [selectedShipment, addLog]);
 
   return (
     <div className="min-h-screen bg-slate-950 pt-20">
@@ -234,6 +338,24 @@ const AdminControl = () => {
                     MapLibre + OpenFreeMap
                   </Badge>
                 </div>
+
+                {/* Click mode indicator */}
+                {isClickMode && (
+                  <div className="absolute inset-x-4 top-16 z-10">
+                    <div className="bg-orange-500/90 backdrop-blur text-white px-4 py-2 rounded-lg text-sm text-center animate-pulse">
+                      <Crosshair className="w-4 h-4 inline mr-2" />
+                      Click on the map to set driver position
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => setIsClickMode(false)}
+                        className="ml-2 text-white hover:bg-orange-600"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
                 {!mapLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
@@ -325,12 +447,33 @@ const AdminControl = () => {
             )}
           </div>
 
-          {/* Right column - Simulation Controller */}
+          {/* Right column - Controllers */}
           <div className="space-y-6">
+            {/* Simulation Controller */}
             <SimulationController 
               variant="full"
               onShipmentCreated={handleShipmentCreated}
             />
+
+            {/* Driver Ping Simulator */}
+            <DriverPingSimulator
+              ref={driverPingRef}
+              shipment={selectedShipment}
+              onLocationUpdate={handleLocationUpdate}
+            />
+
+            {/* Map Click Button */}
+            {selectedShipment && (
+              <Button
+                variant="outline"
+                className={`w-full ${isClickMode ? 'bg-orange-500/20 border-orange-500/50 text-orange-400' : 'bg-slate-800 border-slate-700 text-slate-300'}`}
+                onClick={enableMapClickMode}
+                disabled={isClickMode}
+              >
+                <Crosshair className="w-4 h-4 mr-2" />
+                {isClickMode ? 'Click on Map...' : 'Click Map to Set Position'}
+              </Button>
+            )}
 
             {/* Database Info */}
             <Card className="bg-slate-900 border-slate-800">
@@ -388,7 +531,5 @@ const AdminControl = () => {
     </div>
   );
 };
-
-
 
 export default AdminControl;
