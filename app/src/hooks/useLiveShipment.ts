@@ -9,7 +9,7 @@ import {
   subscribeToShipmentUpdates 
 } from '@/lib/api/shipments';
 import { useSimulation, SIMULATION_PATHS, generateTrackingNumber } from './useSimulation';
-import type { SimulationPath, ShipmentStatus, TrackingLog } from '@/types';
+import type { SimulationPath, ShipmentStatus, TrackingUpdate } from '@/types';
 
 // Batch configuration for tracking logs
 const BATCH_SIZE = 5;
@@ -146,8 +146,8 @@ export function useLiveShipment(): UseLiveShipmentReturn {
         shipment_id: entry.shipmentId,
         lat: entry.lat,
         lng: entry.lng,
-        event_type: entry.eventType as TrackingLog['event_type'],
-        location_name: entry.locationName,
+        source: entry.eventType || 'manual',
+        metadata: entry.locationName ? { location_name: entry.locationName } : undefined,
       }));
 
       await batchInsertTrackingLogs(logs);

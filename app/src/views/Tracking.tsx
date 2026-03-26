@@ -28,17 +28,17 @@ import { Badge } from '@/components/ui/badge';
 import { TrackingMap } from '@/components/TrackingMap';
 import { StatusBadge, LiveBadge } from '@/components/TransportMarker';
 import { useLiveTracking } from '@/hooks/useLiveTracking';
-import type { TrackingLog, TransportMode } from '@/types';
+import type { TrackingUpdate, TransportMode } from '@/types';
 
 // Timeline component
-const TrackingTimeline = ({ history }: { history: TrackingLog[] }) => {
-  const getEventIcon = (eventType: string) => {
-    switch (eventType) {
+const TrackingTimeline = ({ history }: { history: TrackingUpdate[] }) => {
+  const getEventIcon = (source: string) => {
+    switch (source) {
       case 'departure':
         return <Ship className="w-4 h-4" />;
       case 'arrival':
         return <Package className="w-4 h-4" />;
-      case 'customs-clearance':
+      case 'customs':
         return <Clock className="w-4 h-4" />;
       case 'checkpoint':
         return <MapPin className="w-4 h-4" />;
@@ -47,16 +47,25 @@ const TrackingTimeline = ({ history }: { history: TrackingLog[] }) => {
     }
   };
 
-  const getEventLabel = (eventType: string) => {
+  const getEventLabel = (source: string) => {
     const labels: Record<string, string> = {
       'departure': 'Departed',
       'arrival': 'Arrived',
-      'customs-clearance': 'Customs Cleared',
+      'customs': 'Customs Cleared',
       'checkpoint': 'Checkpoint Passed',
-      'location-update': 'Location Updated',
-      'delay': 'Delay Reported',
+      'manual': 'Location Updated',
+      'gps': 'GPS Update',
+      'device': 'Device Update',
     };
-    return labels[eventType] || eventType;
+    return labels[source] || source;
+  };
+
+  // Helper to get location name from metadata
+  const getLocationName = (event: TrackingUpdate): string => {
+    if (event.metadata && typeof event.metadata === 'object' && 'location_name' in event.metadata) {
+      return (event.metadata as { location_name?: string }).location_name || '';
+    }
+    return '';
   };
 
   return (
@@ -74,21 +83,21 @@ const TrackingTimeline = ({ history }: { history: TrackingLog[] }) => {
               ? 'bg-orange-500 text-white' 
               : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
           }`}>
-            {getEventIcon(event.event_type || '')}
+            {getEventIcon(event.source || '')}
           </div>
 
           {/* Event content */}
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-900 dark:text-white">
-                {getEventLabel(event.event_type || '')}
+                {getEventLabel(event.source || '')}
               </span>
               <span className="text-xs text-slate-500">
-                {new Date(event.timestamp).toLocaleDateString()} at {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {event.created_at ? new Date(event.created_at).toLocaleDateString() : 'N/A'} at {event.created_at ? new Date(event.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A'}
               </span>
             </div>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
-              {event.location_name || `${event.lat.toFixed(4)}, ${event.lng.toFixed(4)}`}
+              {getLocationName(event) || `${event.lat.toFixed(4)}, ${event.lng.toFixed(4)}`}
             </p>
           </div>
         </div>

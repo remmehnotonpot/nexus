@@ -5,19 +5,19 @@
 
 import { supabase } from '@/lib/supabase';
 import { NotFoundError, DatabaseError } from '@/lib/errors';
-import type { Shipment, TrackingLog } from '@/types';
+import type { Shipment, TrackingUpdate } from '@/types';
 
 /**
  * Get a shipment by tracking number with full tracking history
  */
 export async function getShipmentByTrackingNumber(
   trackingNumber: string
-): Promise<(Shipment & { tracking_logs: TrackingLog[] }) | null> {
+): Promise<(Shipment & { tracking_updates: TrackingUpdate[] }) | null> {
   const { data, error } = await supabase
     .from('shipments')
     .select(`
       *,
-      tracking_logs (*)
+      tracking_updates (*)
     `)
     .eq('tracking_number', trackingNumber)
     .single();
@@ -123,15 +123,15 @@ export async function addTrackingLog(
   shipmentId: string,
   lat: number,
   lng: number,
-  eventType: TrackingLog['event_type'] = 'location-update',
+  eventType: TrackingUpdate['source'] = 'manual',
   locationName?: string
 ): Promise<void> {
-  const { error } = await supabase.from('tracking_logs').insert({
+  const { error } = await supabase.from('tracking_updates').insert({
     shipment_id: shipmentId,
     lat,
     lng,
-    event_type: eventType,
-    location_name: locationName,
+    source: eventType,
+    metadata: locationName ? { location_name: locationName } : undefined,
   });
 
   if (error) {
@@ -148,11 +148,11 @@ export async function batchInsertTrackingLogs(
     shipment_id: string;
     lat: number;
     lng: number;
-    event_type: TrackingLog['event_type'];
-    location_name?: string;
+    source: TrackingUpdate['source'];
+    metadata?: { location_name?: string };
   }>
 ): Promise<void> {
-  const { error } = await supabase.from('tracking_logs').insert(logs);
+  const { error } = await supabase.from('tracking_updates').insert(logs);
 
   if (error) {
     console.error('Error batch inserting tracking logs:', error);
@@ -211,7 +211,7 @@ export function subscribeToShipmentUpdates(
  */
 export function subscribeToTrackingLogs(
   shipmentId: string,
-  callback: (payload: { new: TrackingLog }) => void
+  callback: (payload: { new: TrackingUpdate }) => void
 ) {
   return supabase
     .channel(`tracking-${shipmentId}`)
@@ -220,10 +220,10 @@ export function subscribeToTrackingLogs(
       {
         event: 'INSERT',
         schema: 'public',
-        table: 'tracking_logs',
+        table: 'tracking_updates',
         filter: `shipment_id=eq.${shipmentId}`,
       },
-      (payload: unknown) => callback(payload as { new: TrackingLog })
+      (payload: unknown) => callback(payload as { new: TrackingUpdate })
     )
     .subscribe();
 }

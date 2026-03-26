@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { StatusBadge, LiveBadge } from './TransportMarker';
-import type { Shipment, TrackingLog, TransportMode } from '@/types';
+import type { Shipment, TrackingUpdate, TransportMode } from '@/types';
 
 // OpenFreeMap styles
 const OPENFREEMAP_STYLES = {
@@ -15,7 +15,7 @@ const OPENFREEMAP_STYLES = {
 
 interface TrackingMapProps {
   shipment: Shipment | null;
-  trackingHistory: TrackingLog[];
+  trackingHistory: TrackingUpdate[];
   isLive?: boolean;
   className?: string;
   mapStyle?: keyof typeof OPENFREEMAP_STYLES;

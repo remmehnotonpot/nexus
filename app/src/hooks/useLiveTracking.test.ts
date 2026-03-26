@@ -45,7 +45,7 @@ vi.mock('@/lib/supabase', () => {
                 estimated_arrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
-                tracking_logs: [],
+                tracking_updates: [],
               },
               error: null,
             }),
@@ -76,7 +76,7 @@ vi.mock('@/lib/api/shipments', () => ({
         estimated_arrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
-        tracking_logs: [],
+        tracking_updates: [],
       };
     }
     return null;

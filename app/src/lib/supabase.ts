@@ -14,7 +14,7 @@ export async function getShipmentByTrackingNumber(trackingNumber: string) {
     .from('shipments')
     .select(`
       *,
-      tracking_logs (*)
+      tracking_updates (*)
     `)
     .eq('tracking_number', trackingNumber)
     .single();
@@ -60,12 +60,12 @@ export async function addTrackingLog(
   eventType: string = 'location-update',
   locationName?: string
 ) {
-  const { error } = await supabase.from('tracking_logs').insert({
+  const { error } = await supabase.from('tracking_updates').insert({
     shipment_id: shipmentId,
     lat,
     lng,
-    event_type: eventType,
-    location_name: locationName,
+    source: eventType,
+    metadata: locationName ? { location_name: locationName } : undefined,
   });
 
   if (error) throw error;
@@ -134,7 +134,7 @@ export function subscribeToTrackingLogs(
       {
         event: 'INSERT',
         schema: 'public',
-        table: 'tracking_logs',
+        table: 'tracking_updates',
         filter: `shipment_id=eq.${shipmentId}`,
       },
       callback

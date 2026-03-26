@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getShipmentByTrackingNumber } from '@/lib/api/shipments';
 import { locationSchema } from '@/lib/schemas/shipment';
-import type { Shipment, TrackingLog, ShipmentStatus } from '@/types';
+import type { Shipment, TrackingUpdate, ShipmentStatus } from '@/types';
 
 // =====================================================
 // TYPES
@@ -18,7 +18,7 @@ export interface LiveTrackingState {
   /** Current heading in degrees */
   heading: number;
   /** Tracking history (breadcrumb trail) */
-  trackingHistory: TrackingLog[];
+  trackingHistory: TrackingUpdate[];
   /** Loading state for initial fetch */
   isLoading: boolean;
   /** Error message if fetch/subscription fails */
@@ -55,7 +55,7 @@ export interface UseLiveTrackingReturn extends LiveTrackingState {
 export function useLiveTracking(trackingNumber: string | null): UseLiveTrackingReturn {
   // Core state
   const [shipment, setShipment] = useState<Shipment | null>(null);
-  const [trackingHistory, setTrackingHistory] = useState<TrackingLog[]>([]);
+  const [trackingHistory, setTrackingHistory] = useState<TrackingUpdate[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<LiveTrackingState['connectionStatus']>('disconnected');
@@ -98,7 +98,7 @@ export function useLiveTracking(trackingNumber: string | null): UseLiveTrackingR
       }
 
       setShipment(data);
-      setTrackingHistory(data.tracking_logs || []);
+      setTrackingHistory(data.tracking_updates || []);
       shipmentIdRef.current = data.id;
       setLastUpdateTime(new Date());
     } catch (err) {

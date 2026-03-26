@@ -31,7 +31,7 @@ describe('Shipments API', () => {
   describe('getShipmentByTrackingNumber', () => {
     it('fetches shipment by tracking number', async () => {
       const mockShipment = createMockShipment({ tracking_number: 'NXS-TEST-001' });
-      const mockData = { ...mockShipment, tracking_logs: [] };
+      const mockData = { ...mockShipment, tracking_updates: [] };
       
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -166,8 +166,8 @@ describe('Shipments API', () => {
       } as unknown as ReturnType<typeof supabase.from>);
 
       const logs = [
-        { shipment_id: 'ship-1', lat: 0, lng: 0, event_type: 'location-update' as const },
-        { shipment_id: 'ship-1', lat: 1, lng: 1, event_type: 'checkpoint' as const },
+        { shipment_id: 'ship-1', lat: 0, lng: 0, source: 'manual' },
+        { shipment_id: 'ship-1', lat: 1, lng: 1, source: 'gps' },
       ];
 
       await expect(batchInsertTrackingLogs(logs)).resolves.not.toThrow();
