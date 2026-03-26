@@ -1,0 +1,229 @@
+/**
+ * Shipments API Layer
+ * Database operations for shipments with Supabase
+ */
+
+import { supabase } from '@/lib/supabase';
+import { NotFoundError, DatabaseError } from '@/lib/errors';
+import type { Shipment, TrackingLog } from '@/types';
+
+/**
+ * Get a shipment by tracking number with full tracking history
+ */
+export async function getShipmentByTrackingNumber(
+  trackingNumber: string
+): Promise<(Shipment & { tracking_logs: TrackingLog[] }) | null> {
+  const { data, error } = await supabase
+    .from('shipments')
+    .select(`
+      *,
+      tracking_logs (*)
+    `)
+    .eq('tracking_number', trackingNumber)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    console.error('Error fetching shipment:', error);
+    throw new DatabaseError('Failed to fetch shipment');
+  }
+
+  return data;
+}
+
+/**
+ * Get all shipments for a customer
+ */
+export async function getShipmentsByCustomer(customerId: string): Promise<Shipment[]> {
+  const { data, error } = await supabase
+    .from('shipments')
+    .select('*')
+    .eq('customer_id', customerId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching shipments:', error);
+    throw new DatabaseError('Failed to fetch shipments');
+  }
+
+  return data || [];
+}
+
+/**
+ * Get all demo shipments
+ */
+export async function getDemoShipments(): Promise<Shipment[]> {
+  const { data, error } = await supabase
+    .from('shipments')
+    .select('*')
+    .eq('is_live_demo', true)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching demo shipments:', error);
+    throw new DatabaseError('Failed to fetch demo shipments');
+  }
+
+  return data || [];
+}
+
+/**
+ * Update shipment location
+ */
+export async function updateShipmentLocation(
+  shipmentId: string,
+  lat: number,
+  lng: number,
+  heading?: number
+): Promise<void> {
+  const { error } = await supabase
+    .from('shipments')
+    .update({
+      current_lat: lat,
+      current_lng: lng,
+      current_heading: heading ?? 0,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', shipmentId);
+
+  if (error) {
+    console.error('Error updating shipment location:', error);
+    throw new DatabaseError('Failed to update shipment location');
+  }
+}
+
+/**
+ * Update shipment status
+ */
+export async function updateShipmentStatus(
+  shipmentId: string,
+  status: Shipment['status']
+): Promise<void> {
+  const { error } = await supabase
+    .from('shipments')
+    .update({
+      status,
+      updated_at: new Date().toISOString(),
+      ...(status === 'delivered' ? { actual_arrival: new Date().toISOString() } : {}),
+    })
+    .eq('id', shipmentId);
+
+  if (error) {
+    console.error('Error updating shipment status:', error);
+    throw new DatabaseError('Failed to update shipment status');
+  }
+}
+
+/**
+ * Add tracking log entry
+ */
+export async function addTrackingLog(
+  shipmentId: string,
+  lat: number,
+  lng: number,
+  eventType: TrackingLog['event_type'] = 'location-update',
+  locationName?: string
+): Promise<void> {
+  const { error } = await supabase.from('tracking_logs').insert({
+    shipment_id: shipmentId,
+    lat,
+    lng,
+    event_type: eventType,
+    location_name: locationName,
+  });
+
+  if (error) {
+    console.error('Error adding tracking log:', error);
+    throw new DatabaseError('Failed to add tracking log');
+  }
+}
+
+/**
+ * Batch insert tracking logs
+ */
+export async function batchInsertTrackingLogs(
+  logs: Array<{
+    shipment_id: string;
+    lat: number;
+    lng: number;
+    event_type: TrackingLog['event_type'];
+    location_name?: string;
+  }>
+): Promise<void> {
+  const { error } = await supabase.from('tracking_logs').insert(logs);
+
+  if (error) {
+    console.error('Error batch inserting tracking logs:', error);
+    throw new DatabaseError('Failed to batch insert tracking logs');
+  }
+}
+
+/**
+ * Create new shipment
+ */
+export async function createShipment(
+  shipment: Omit<Shipment, 'id' | 'created_at' | 'updated_at'>
+): Promise<Shipment> {
+  const { data, error } = await supabase
+    .from('shipments')
+    .insert(shipment)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error creating shipment:', error);
+    throw new DatabaseError('Failed to create shipment');
+  }
+
+  if (!data) {
+    throw new DatabaseError('No data returned from create shipment');
+  }
+
+  return data;
+}
+
+/**
+ * Subscribe to real-time shipment updates
+ */
+export function subscribeToShipmentUpdates(
+  shipmentId: string,
+  callback: (payload: { new: Shipment; old: Shipment | null }) => void
+) {
+  return supabase
+    .channel(`shipment-${shipmentId}`)
+    .on(
+      'postgres_changes' as const,
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'shipments',
+        filter: `id=eq.${shipmentId}`,
+      },
+      (payload: unknown) => callback(payload as { new: Shipment; old: Shipment | null })
+    )
+    .subscribe();
+}
+
+/**
+ * Subscribe to tracking logs for a shipment
+ */
+export function subscribeToTrackingLogs(
+  shipmentId: string,
+  callback: (payload: { new: TrackingLog }) => void
+) {
+  return supabase
+    .channel(`tracking-${shipmentId}`)
+    .on(
+      'postgres_changes' as const,
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'tracking_logs',
+        filter: `shipment_id=eq.${shipmentId}`,
+      },
+      (payload: unknown) => callback(payload as { new: TrackingLog })
+    )
+    .subscribe();
+}
