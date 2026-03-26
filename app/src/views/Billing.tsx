@@ -25,21 +25,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import type { Invoice, InvoiceStatus } from '@/types';
+import type { Invoice } from '@/types';
 
-// Mock data
-const mockInvoices: Invoice[] = [
+// Invoice status type derived from Invoice table
+type InvoiceStatus = 'draft' | 'sent' | 'paid' | 'overdue' | 'cancelled';
+
+// Mock data - using Partial<Invoice> to allow optional fields for demo
+const mockInvoices: Partial<Invoice>[] = [
   {
     id: '1',
     invoice_number: 'INV-2026-001',
     customer_id: 'user-1',
     amount: 4850.00,
+    total_amount: 4850.00,
     currency: 'USD',
     status: 'paid',
     issue_date: '2026-03-01',
     due_date: '2026-03-15',
     paid_date: '2026-03-10',
-    description: 'Ocean freight - Shanghai to Los Angeles',
+    notes: 'Ocean freight - Shanghai to Los Angeles',
     created_at: '2026-03-01',
   },
   {
@@ -47,11 +51,12 @@ const mockInvoices: Invoice[] = [
     invoice_number: 'INV-2026-002',
     customer_id: 'user-1',
     amount: 3200.00,
+    total_amount: 3200.00,
     currency: 'USD',
     status: 'sent',
     issue_date: '2026-03-10',
     due_date: '2026-03-24',
-    description: 'Air freight - Dubai to London',
+    notes: 'Air freight - Dubai to London',
     created_at: '2026-03-10',
   },
   {
@@ -59,11 +64,12 @@ const mockInvoices: Invoice[] = [
     invoice_number: 'INV-2026-003',
     customer_id: 'user-1',
     amount: 7800.00,
+    total_amount: 7800.00,
     currency: 'USD',
     status: 'overdue',
     issue_date: '2026-02-15',
     due_date: '2026-03-01',
-    description: 'Rail freight - Hong Kong to Hamburg',
+    notes: 'Rail freight - Hong Kong to Hamburg',
     created_at: '2026-02-15',
   },
   {
@@ -71,10 +77,11 @@ const mockInvoices: Invoice[] = [
     invoice_number: 'INV-2026-004',
     customer_id: 'user-1',
     amount: 1250.00,
+    total_amount: 1250.00,
     currency: 'USD',
     status: 'draft',
     issue_date: '2026-03-18',
-    description: 'Warehousing - March 2026',
+    notes: 'Warehousing - March 2026',
     created_at: '2026-03-18',
   },
   {
@@ -82,12 +89,13 @@ const mockInvoices: Invoice[] = [
     invoice_number: 'INV-2026-005',
     customer_id: 'user-1',
     amount: 5600.00,
+    total_amount: 5600.00,
     currency: 'USD',
     status: 'paid',
     issue_date: '2026-02-01',
     due_date: '2026-02-15',
     paid_date: '2026-02-12',
-    description: 'Ocean freight - Rotterdam to New York',
+    notes: 'Ocean freight - Rotterdam to New York',
     created_at: '2026-02-01',
   },
 ];
@@ -119,7 +127,11 @@ const InvoiceStatusBadge = ({ status }: { status: InvoiceStatus }) => {
 };
 
 // Invoice row component
-const InvoiceRow = ({ invoice }: { invoice: Invoice }) => {
+const InvoiceRow = ({ invoice }: { invoice: Partial<Invoice> }) => {
+  const status = invoice.status as InvoiceStatus | null | undefined;
+  const notes = invoice.notes;
+  const issueDate = invoice.issue_date;
+  
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
       <td className="py-4 px-4">
@@ -131,17 +143,17 @@ const InvoiceRow = ({ invoice }: { invoice: Invoice }) => {
             <p className="font-mono font-medium text-slate-900 dark:text-white">
               {invoice.invoice_number}
             </p>
-            <p className="text-xs text-slate-500">{invoice.description}</p>
+            <p className="text-xs text-slate-500">{notes || '—'}</p>
           </div>
         </div>
       </td>
       <td className="py-4 px-4">
-        <InvoiceStatusBadge status={invoice.status} />
+        {status ? <InvoiceStatusBadge status={status} /> : <span className="text-slate-400">—</span>}
       </td>
       <td className="py-4 px-4">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-slate-400" />
-          <span className="text-sm">{new Date(invoice.issue_date).toLocaleDateString()}</span>
+          <span className="text-sm">{issueDate ? new Date(issueDate).toLocaleDateString() : '—'}</span>
         </div>
       </td>
       <td className="py-4 px-4">
@@ -152,7 +164,7 @@ const InvoiceRow = ({ invoice }: { invoice: Invoice }) => {
       </td>
       <td className="py-4 px-4">
         <p className="font-medium text-slate-900 dark:text-white">
-          ${invoice.amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+          ${(invoice.amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
         </p>
         <p className="text-xs text-slate-500">{invoice.currency}</p>
       </td>
@@ -190,14 +202,15 @@ const Billing = () => {
   // Filter invoices
   const filteredInvoices = mockInvoices.filter(invoice => {
     const matchesSearch = 
-      invoice.invoice_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (invoice.description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+      invoice.invoice_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (invoice.notes?.toLowerCase() || '').includes(searchQuery.toLowerCase());
     
+    const status = invoice.status;
     const matchesTab = 
       activeTab === 'all' ? true :
-      activeTab === 'unpaid' ? ['sent', 'overdue'].includes(invoice.status) :
-      activeTab === 'paid' ? invoice.status === 'paid' :
-      activeTab === 'overdue' ? invoice.status === 'overdue' : true;
+      activeTab === 'unpaid' ? (status === 'sent' || status === 'overdue') :
+      activeTab === 'paid' ? status === 'paid' :
+      activeTab === 'overdue' ? status === 'overdue' : true;
 
     return matchesSearch && matchesTab;
   });
@@ -205,14 +218,14 @@ const Billing = () => {
   // Stats
   const stats = {
     totalOutstanding: mockInvoices
-      .filter(i => ['sent', 'overdue'].includes(i.status))
-      .reduce((sum, i) => sum + i.amount, 0),
+      .filter(i => i.status === 'sent' || i.status === 'overdue')
+      .reduce((sum, i) => sum + (i.amount || 0), 0),
     totalPaid: mockInvoices
       .filter(i => i.status === 'paid')
-      .reduce((sum, i) => sum + i.amount, 0),
+      .reduce((sum, i) => sum + (i.amount || 0), 0),
     overdueAmount: mockInvoices
       .filter(i => i.status === 'overdue')
-      .reduce((sum, i) => sum + i.amount, 0),
+      .reduce((sum, i) => sum + (i.amount || 0), 0),
     invoiceCount: mockInvoices.length,
   };
 

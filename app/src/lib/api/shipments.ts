@@ -227,3 +227,66 @@ export function subscribeToTrackingLogs(
     )
     .subscribe();
 }
+
+/**
+ * Record a tracking update for audit trail
+ */
+export async function recordTrackingUpdate(
+  shipmentId: string,
+  lat: number,
+  lng: number,
+  source: string,
+  metadata?: {
+    heading?: number;
+    speed_kmh?: number;
+    accuracy?: number;
+    battery_level?: number;
+  },
+  recordedBy?: string
+): Promise<void> {
+  const { error } = await supabase.from('tracking_updates').insert({
+    shipment_id: shipmentId,
+    lat,
+    lng,
+    source,
+    recorded_by: recordedBy,
+    ...metadata,
+  });
+
+  if (error) {
+    console.error('Error recording tracking update:', error);
+    throw new DatabaseError('Failed to record tracking update');
+  }
+}
+
+/**
+ * Get all shipments with optional filters
+ */
+export async function getShipments(filters?: {
+  customerId?: string;
+  status?: string;
+  limit?: number;
+}): Promise<Shipment[]> {
+  let query = supabase.from('shipments').select('*');
+
+  if (filters?.customerId) {
+    query = query.eq('customer_id', filters.customerId);
+  }
+
+  if (filters?.status) {
+    query = query.eq('status', filters.status);
+  }
+
+  if (filters?.limit) {
+    query = query.limit(filters.limit);
+  }
+
+  const { data, error } = await query.order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching shipments:', error);
+    throw new DatabaseError('Failed to fetch shipments');
+  }
+
+  return data || [];
+}

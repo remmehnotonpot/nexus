@@ -30,23 +30,60 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { StatusBadge } from '@/components/TransportMarker';
-import type { Shipment, TransportMode } from '@/types';
+import type { ShipmentStatus } from '@/types';
+
+// Transport mode type (excluding multimodal for icon mapping)
+type TransportModeWithIcon = 'air' | 'ocean' | 'road' | 'rail';
+
+// Address type for origin/destination
+interface Address {
+  city: string;
+  country: string;
+}
+
+// Shipment interface for this component (matching new schema)
+interface ShipmentView {
+  id: string;
+  tracking_number: string;
+  status: ShipmentStatus;
+  origin_address: Address;
+  origin_lat: number;
+  origin_lng: number;
+  destination_address: Address;
+  destination_lat: number;
+  destination_lng: number;
+  current_lat?: number;
+  current_lng?: number;
+  current_heading?: number;
+  transport_mode: TransportModeWithIcon;
+  delivery_date: string;
+  weight_kg: number;
+  volume_cbm: number;
+  cargo_description?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 // Extended mock data
-const mockShipments: Shipment[] = [
+const mockShipments: ShipmentView[] = [
   {
     id: '1',
     tracking_number: 'NXS-78439201',
-    status: 'in-transit',
-    origin: { city: 'Shanghai', country: 'China', lat: 31.23, lng: 121.47 },
-    destination: { city: 'Los Angeles', country: 'USA', lat: 34.05, lng: -118.24 },
-    current: { lat: 35, lng: 160, heading: 45 },
+    status: 'in_transit',
+    origin_address: { city: 'Shanghai', country: 'China' },
+    origin_lat: 31.23,
+    origin_lng: 121.47,
+    destination_address: { city: 'Los Angeles', country: 'USA' },
+    destination_lat: 34.05,
+    destination_lng: -118.24,
+    current_lat: 35,
+    current_lng: 160,
+    current_heading: 45,
     transport_mode: 'ocean',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
     weight_kg: 15000,
     volume_cbm: 45.5,
-    goods_description: 'Electronics - Consumer Goods',
+    cargo_description: 'Electronics - Consumer Goods',
     created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   },
@@ -54,15 +91,20 @@ const mockShipments: Shipment[] = [
     id: '2',
     tracking_number: 'NXS-92345678',
     status: 'customs',
-    origin: { city: 'Rotterdam', country: 'Netherlands', lat: 51.92, lng: 4.48 },
-    destination: { city: 'New York', country: 'USA', lat: 40.71, lng: -74.01 },
-    current: { lat: 40.71, lng: -74.01, heading: 0 },
+    origin_address: { city: 'Rotterdam', country: 'Netherlands' },
+    origin_lat: 51.92,
+    origin_lng: 4.48,
+    destination_address: { city: 'New York', country: 'USA' },
+    destination_lat: 40.71,
+    destination_lng: -74.01,
+    current_lat: 40.71,
+    current_lng: -74.01,
+    current_heading: 0,
     transport_mode: 'ocean',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
     weight_kg: 25000,
     volume_cbm: 62.0,
-    goods_description: 'Automotive Parts',
+    cargo_description: 'Automotive Parts',
     created_at: new Date(Date.now() - 12 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   },
@@ -70,15 +112,20 @@ const mockShipments: Shipment[] = [
     id: '3',
     tracking_number: 'NXS-11223344',
     status: 'delivered',
-    origin: { city: 'Dubai', country: 'UAE', lat: 25.20, lng: 55.27 },
-    destination: { city: 'London', country: 'UK', lat: 51.51, lng: -0.13 },
-    current: { lat: 51.51, lng: -0.13, heading: 0 },
+    origin_address: { city: 'Dubai', country: 'UAE' },
+    origin_lat: 25.20,
+    origin_lng: 55.27,
+    destination_address: { city: 'London', country: 'UK' },
+    destination_lat: 51.51,
+    destination_lng: -0.13,
+    current_lat: 51.51,
+    current_lng: -0.13,
+    current_heading: 0,
     transport_mode: 'air',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     weight_kg: 2500,
     volume_cbm: 12.5,
-    goods_description: 'Pharmaceuticals',
+    cargo_description: 'Pharmaceuticals',
     created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   },
@@ -86,47 +133,62 @@ const mockShipments: Shipment[] = [
     id: '4',
     tracking_number: 'NXS-55667788',
     status: 'pending',
-    origin: { city: 'Hong Kong', country: 'China', lat: 22.32, lng: 114.17 },
-    destination: { city: 'Hamburg', country: 'Germany', lat: 53.55, lng: 10.00 },
-    current: { lat: 22.32, lng: 114.17, heading: 0 },
+    origin_address: { city: 'Hong Kong', country: 'China' },
+    origin_lat: 22.32,
+    origin_lng: 114.17,
+    destination_address: { city: 'Hamburg', country: 'Germany' },
+    destination_lat: 53.55,
+    destination_lng: 10.00,
+    current_lat: 22.32,
+    current_lng: 114.17,
+    current_heading: 0,
     transport_mode: 'rail',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString(),
     weight_kg: 35000,
     volume_cbm: 85.0,
-    goods_description: 'Textiles & Garments',
+    cargo_description: 'Textiles & Garments',
     created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   },
   {
     id: '5',
     tracking_number: 'NXS-99887766',
-    status: 'out-for-delivery',
-    origin: { city: 'Singapore', country: 'Singapore', lat: 1.35, lng: 103.82 },
-    destination: { city: 'Sydney', country: 'Australia', lat: -33.87, lng: 151.21 },
-    current: { lat: -33.87, lng: 151.20, heading: 90 },
+    status: 'out_for_delivery',
+    origin_address: { city: 'Singapore', country: 'Singapore' },
+    origin_lat: 1.35,
+    origin_lng: 103.82,
+    destination_address: { city: 'Sydney', country: 'Australia' },
+    destination_lat: -33.87,
+    destination_lng: 151.21,
+    current_lat: -33.87,
+    current_lng: 151.20,
+    current_heading: 90,
     transport_mode: 'ocean',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
     weight_kg: 18000,
     volume_cbm: 52.0,
-    goods_description: 'Machinery Equipment',
+    cargo_description: 'Machinery Equipment',
     created_at: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   },
   {
     id: '6',
     tracking_number: 'NXS-33445566',
-    status: 'delayed',
-    origin: { city: 'Mumbai', country: 'India', lat: 19.08, lng: 72.88 },
-    destination: { city: 'Dubai', country: 'UAE', lat: 25.20, lng: 55.27 },
-    current: { lat: 22.0, lng: 64.0, heading: 270 },
+    status: 'exception',
+    origin_address: { city: 'Mumbai', country: 'India' },
+    origin_lat: 19.08,
+    origin_lng: 72.88,
+    destination_address: { city: 'Dubai', country: 'UAE' },
+    destination_lat: 25.20,
+    destination_lng: 55.27,
+    current_lat: 22.0,
+    current_lng: 64.0,
+    current_heading: 270,
     transport_mode: 'air',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
     weight_kg: 5000,
     volume_cbm: 25.0,
-    goods_description: 'Perishable Goods',
+    cargo_description: 'Perishable Goods',
     created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   },
@@ -134,39 +196,49 @@ const mockShipments: Shipment[] = [
     id: '7',
     tracking_number: 'NXS-77889900',
     status: 'delivered',
-    origin: { city: 'Tokyo', country: 'Japan', lat: 35.68, lng: 139.69 },
-    destination: { city: 'Seoul', country: 'South Korea', lat: 37.57, lng: 126.98 },
-    current: { lat: 37.57, lng: 126.98, heading: 0 },
+    origin_address: { city: 'Tokyo', country: 'Japan' },
+    origin_lat: 35.68,
+    origin_lng: 139.69,
+    destination_address: { city: 'Seoul', country: 'South Korea' },
+    destination_lat: 37.57,
+    destination_lng: 126.98,
+    current_lat: 37.57,
+    current_lng: 126.98,
+    current_heading: 0,
     transport_mode: 'road',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
     weight_kg: 8000,
     volume_cbm: 32.0,
-    goods_description: 'Consumer Electronics',
+    cargo_description: 'Consumer Electronics',
     created_at: new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   },
   {
     id: '8',
     tracking_number: 'NXS-44556677',
-    status: 'in-transit',
-    origin: { city: 'Sao Paulo', country: 'Brazil', lat: -23.55, lng: -46.63 },
-    destination: { city: 'Miami', country: 'USA', lat: 25.76, lng: -80.19 },
-    current: { lat: 5.0, lng: -35.0, heading: 330 },
+    status: 'in_transit',
+    origin_address: { city: 'Sao Paulo', country: 'Brazil' },
+    origin_lat: -23.55,
+    origin_lng: -46.63,
+    destination_address: { city: 'Miami', country: 'USA' },
+    destination_lat: 25.76,
+    destination_lng: -80.19,
+    current_lat: 5.0,
+    current_lng: -35.0,
+    current_heading: 330,
     transport_mode: 'ocean',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
     weight_kg: 42000,
     volume_cbm: 98.5,
-    goods_description: 'Agricultural Products',
+    cargo_description: 'Agricultural Products',
     created_at: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
     updated_at: new Date().toISOString(),
   },
 ];
 
 // Transport icon component
-const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: string }) => {
-  const icons: Record<TransportMode, React.ElementType> = {
+const TransportIcon = ({ mode, className }: { mode: TransportModeWithIcon; className?: string }) => {
+  const icons: Record<TransportModeWithIcon, React.ElementType> = {
     air: Plane,
     ocean: Ship,
     road: Truck,
@@ -177,7 +249,7 @@ const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: s
 };
 
 // Shipment row component
-const ShipmentRow = ({ shipment }: { shipment: Shipment }) => {
+const ShipmentRow = ({ shipment }: { shipment: ShipmentView }) => {
   return (
     <tr className="border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
       <td className="py-4 px-4">
@@ -200,8 +272,8 @@ const ShipmentRow = ({ shipment }: { shipment: Shipment }) => {
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-slate-400" />
           <div>
-            <p className="text-sm font-medium">{shipment.origin.city}</p>
-            <p className="text-xs text-slate-500">{shipment.origin.country}</p>
+            <p className="text-sm font-medium">{shipment.origin_address.city}</p>
+            <p className="text-xs text-slate-500">{shipment.origin_address.country}</p>
           </div>
         </div>
       </td>
@@ -209,8 +281,8 @@ const ShipmentRow = ({ shipment }: { shipment: Shipment }) => {
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-orange-500" />
           <div>
-            <p className="text-sm font-medium">{shipment.destination.city}</p>
-            <p className="text-xs text-slate-500">{shipment.destination.country}</p>
+            <p className="text-sm font-medium">{shipment.destination_address.city}</p>
+            <p className="text-xs text-slate-500">{shipment.destination_address.country}</p>
           </div>
         </div>
       </td>
@@ -220,11 +292,11 @@ const ShipmentRow = ({ shipment }: { shipment: Shipment }) => {
       <td className="py-4 px-4">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-slate-400" />
-          <span className="text-sm">{new Date(shipment.estimated_arrival).toLocaleDateString()}</span>
+          <span className="text-sm">{new Date(shipment.delivery_date).toLocaleDateString()}</span>
         </div>
       </td>
       <td className="py-4 px-4">
-        <p className="text-sm">{shipment.weight_kg?.toLocaleString()} kg</p>
+        <p className="text-sm">{shipment.weight_kg.toLocaleString()} kg</p>
         <p className="text-xs text-slate-500">{shipment.volume_cbm} CBM</p>
       </td>
       <td className="py-4 px-4">
@@ -264,15 +336,15 @@ const Shipments = () => {
   const filteredShipments = mockShipments.filter(shipment => {
     const matchesSearch = 
       shipment.tracking_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (shipment.origin.city?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (shipment.destination.city?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-      (shipment.goods_description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
+      shipment.origin_address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      shipment.destination_address.city.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (shipment.cargo_description?.toLowerCase() || '').includes(searchQuery.toLowerCase());
     
     const matchesTab = 
       activeTab === 'all' ? true :
-      activeTab === 'active' ? ['in-transit', 'customs', 'out-for-delivery', 'pending'].includes(shipment.status) :
+      activeTab === 'active' ? ['in_transit', 'customs', 'out_for_delivery', 'pending'].includes(shipment.status) :
       activeTab === 'delivered' ? shipment.status === 'delivered' :
-      activeTab === 'delayed' ? shipment.status === 'delayed' : true;
+      activeTab === 'delayed' ? shipment.status === 'exception' : true;
 
     return matchesSearch && matchesTab;
   });
@@ -287,9 +359,9 @@ const Shipments = () => {
   // Stats
   const stats = {
     all: mockShipments.length,
-    active: mockShipments.filter(s => ['in-transit', 'customs', 'out-for-delivery', 'pending'].includes(s.status)).length,
+    active: mockShipments.filter(s => ['in_transit', 'customs', 'out_for_delivery', 'pending'].includes(s.status)).length,
     delivered: mockShipments.filter(s => s.status === 'delivered').length,
-    delayed: mockShipments.filter(s => s.status === 'delayed').length,
+    delayed: mockShipments.filter(s => s.status === 'exception').length,
   };
 
   return (

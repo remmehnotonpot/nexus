@@ -91,7 +91,7 @@ describe('Shipments API', () => {
 
   describe('getDemoShipments', () => {
     it('fetches demo shipments', async () => {
-      const mockShipments = [createMockShipment({ is_live_demo: true })];
+      const mockShipments = [createMockShipment({ transport_mode: 'ocean' })];
       
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({

@@ -33,73 +33,104 @@ const mockStats = {
   pending_invoices: 3,
 };
 
-const mockShipments: Shipment[] = [
+// Mock shipments - using type assertion to avoid requiring all database fields
+const mockShipments = [
   {
     id: '1',
     tracking_number: 'NXS-78439201',
-    status: 'in-transit',
-    origin: { city: 'Shanghai', country: 'China', lat: 31.23, lng: 121.47 },
-    destination: { city: 'Los Angeles', country: 'USA', lat: 34.05, lng: -118.24 },
-    current: { lat: 35, lng: 160, heading: 45 },
+    status: 'in_transit',
+    origin_address: { city: 'Shanghai', country: 'China' },
+    origin_lat: 31.23,
+    origin_lng: 121.47,
+    destination_address: { city: 'Los Angeles', country: 'USA' },
+    destination_lat: 34.05,
+    destination_lng: -118.24,
+    current_lat: 35,
+    current_lng: 160,
+    current_heading: 45,
     transport_mode: 'ocean',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    weight_kg: 1000,
   },
   {
     id: '2',
     tracking_number: 'NXS-92345678',
     status: 'customs',
-    origin: { city: 'Rotterdam', country: 'Netherlands', lat: 51.92, lng: 4.48 },
-    destination: { city: 'New York', country: 'USA', lat: 40.71, lng: -74.01 },
-    current: { lat: 40.71, lng: -74.01, heading: 0 },
+    origin_address: { city: 'Rotterdam', country: 'Netherlands' },
+    origin_lat: 51.92,
+    origin_lng: 4.48,
+    destination_address: { city: 'New York', country: 'USA' },
+    destination_lat: 40.71,
+    destination_lng: -74.01,
+    current_lat: 40.71,
+    current_lng: -74.01,
+    current_heading: 0,
     transport_mode: 'ocean',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    weight_kg: 500,
   },
   {
     id: '3',
     tracking_number: 'NXS-11223344',
     status: 'delivered',
-    origin: { city: 'Dubai', country: 'UAE', lat: 25.20, lng: 55.27 },
-    destination: { city: 'London', country: 'UK', lat: 51.51, lng: -0.13 },
-    current: { lat: 51.51, lng: -0.13, heading: 0 },
+    origin_address: { city: 'Dubai', country: 'UAE' },
+    origin_lat: 25.20,
+    origin_lng: 55.27,
+    destination_address: { city: 'London', country: 'UK' },
+    destination_lat: 51.51,
+    destination_lng: -0.13,
+    current_lat: 51.51,
+    current_lng: -0.13,
+    current_heading: 0,
     transport_mode: 'air',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    weight_kg: 200,
   },
   {
     id: '4',
     tracking_number: 'NXS-55667788',
     status: 'pending',
-    origin: { city: 'Hong Kong', country: 'China', lat: 22.32, lng: 114.17 },
-    destination: { city: 'Hamburg', country: 'Germany', lat: 53.55, lng: 10.00 },
-    current: { lat: 22.32, lng: 114.17, heading: 0 },
+    origin_address: { city: 'Hong Kong', country: 'China' },
+    origin_lat: 22.32,
+    origin_lng: 114.17,
+    destination_address: { city: 'Hamburg', country: 'Germany' },
+    destination_lat: 53.55,
+    destination_lng: 10.00,
+    current_lat: 22.32,
+    current_lng: 114.17,
+    current_heading: 0,
     transport_mode: 'rail',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 12 * 24 * 60 * 60 * 1000).toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    weight_kg: 800,
   },
   {
     id: '5',
     tracking_number: 'NXS-99887766',
-    status: 'out-for-delivery',
-    origin: { city: 'Singapore', country: 'Singapore', lat: 1.35, lng: 103.82 },
-    destination: { city: 'Sydney', country: 'Australia', lat: -33.87, lng: 151.21 },
-    current: { lat: -33.87, lng: 151.20, heading: 90 },
+    status: 'out_for_delivery',
+    origin_address: { city: 'Singapore', country: 'Singapore' },
+    origin_lat: 1.35,
+    origin_lng: 103.82,
+    destination_address: { city: 'Sydney', country: 'Australia' },
+    destination_lat: -33.87,
+    destination_lng: 151.21,
+    current_lat: -33.87,
+    current_lng: 151.20,
+    current_heading: 90,
     transport_mode: 'ocean',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
+    delivery_date: new Date(Date.now() + 1 * 24 * 60 * 60 * 1000).toISOString(),
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    weight_kg: 600,
   },
-];
+] as unknown as Shipment[];
 
 const mockNotifications = [
   { id: '1', title: 'Shipment Delivered', message: 'NXS-11223344 has been delivered to London', time: '2 hours ago', read: false },
@@ -171,9 +202,16 @@ const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: s
     ocean: Ship,
     road: Truck,
     rail: Train,
+    multimodal: Ship,
   };
   const Icon = icons[mode];
   return <Icon className={className} />;
+};
+
+// Helper to get city from address
+const getCityFromAddress = (address: unknown): string => {
+  const addr = (address || {}) as Record<string, string>;
+  return addr.city || '';
 };
 
 // Shipment row component
@@ -183,7 +221,7 @@ const ShipmentRow = ({ shipment }: { shipment: Shipment }) => {
       <td className="py-4 px-4">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-            <TransportIcon mode={shipment.transport_mode} className="w-5 h-5 text-slate-500" />
+            <TransportIcon mode={shipment.transport_mode as TransportMode} className="w-5 h-5 text-slate-500" />
           </div>
           <div>
             <Link 
@@ -199,13 +237,13 @@ const ShipmentRow = ({ shipment }: { shipment: Shipment }) => {
       <td className="py-4 px-4">
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-slate-400" />
-          <span className="text-sm">{shipment.origin.city}</span>
+          <span className="text-sm">{getCityFromAddress(shipment.origin_address)}</span>
         </div>
       </td>
       <td className="py-4 px-4">
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-orange-500" />
-          <span className="text-sm">{shipment.destination.city}</span>
+          <span className="text-sm">{getCityFromAddress(shipment.destination_address)}</span>
         </div>
       </td>
       <td className="py-4 px-4">
@@ -214,7 +252,7 @@ const ShipmentRow = ({ shipment }: { shipment: Shipment }) => {
       <td className="py-4 px-4">
         <div className="flex items-center gap-2">
           <Calendar className="w-4 h-4 text-slate-400" />
-          <span className="text-sm">{new Date(shipment.estimated_arrival).toLocaleDateString()}</span>
+          <span className="text-sm">{shipment.delivery_date ? new Date(shipment.delivery_date).toLocaleDateString() : '-'}</span>
         </div>
       </td>
       <td className="py-4 px-4">
@@ -235,8 +273,8 @@ const Dashboard = () => {
 
   const filteredShipments = mockShipments.filter(s => 
     s.tracking_number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (s.origin.city?.toLowerCase() || '').includes(searchQuery.toLowerCase()) ||
-    (s.destination.city?.toLowerCase() || '').includes(searchQuery.toLowerCase())
+    getCityFromAddress(s.origin_address).toLowerCase().includes(searchQuery.toLowerCase()) ||
+    getCityFromAddress(s.destination_address).toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (

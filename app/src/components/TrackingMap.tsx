@@ -93,7 +93,7 @@ export const TrackingMap = ({
           'line-cap': 'round',
         },
         paint: {
-          'line-color': '#FF6B00',
+          'line-color': '#0EA5E9',
           'line-width': 3,
           'line-opacity': 0.8,
         },
@@ -109,7 +109,7 @@ export const TrackingMap = ({
           'line-cap': 'round',
         },
         paint: {
-          'line-color': '#FF6B00',
+          'line-color': '#0EA5E9',
           'line-width': 8,
           'line-opacity': 0.2,
           'line-blur': 4,
@@ -285,6 +285,22 @@ export const TrackingMap = ({
     }
   }, [animateMarker]);
 
+  // Store the plane SVG content
+  const planeSvgRef = useRef<string>('');
+
+  // Fetch plane SVG on mount
+  useEffect(() => {
+    fetch('/plane-marker.svg')
+      .then(res => res.text())
+      .then(svg => {
+        planeSvgRef.current = svg;
+      })
+      .catch(() => {
+        // Fallback to inline icon if fetch fails
+        planeSvgRef.current = '';
+      });
+  }, []);
+
   /**
    * Create marker DOM element
    */
@@ -294,13 +310,15 @@ export const TrackingMap = ({
     markerEl.style.width = '48px';
     markerEl.style.height = '48px';
 
+    const iconSvg = getTransportIconSvg(mode, planeSvgRef.current);
+    
     markerEl.innerHTML = `
-      <div class="relative flex items-center justify-center text-[#FF6B00]" style="width: 48px; height: 48px;">
-        <div class="absolute inset-0 rounded-full bg-current opacity-20 animate-ping"></div>
-        <div class="relative z-10 w-3/4 h-3/4 transport-icon">
-          ${getTransportIconSvg(mode)}
+      <div class="relative flex items-center justify-center" style="width: 48px; height: 48px;">
+        <div class="absolute inset-0 rounded-full bg-sky-500 opacity-20 animate-ping"></div>
+        <div class="relative z-10 w-3/4 h-3/4 transport-icon" style="color: #0EA5E9;">
+          ${iconSvg}
         </div>
-        <div class="absolute w-2 h-2 bg-current rounded-full"></div>
+        <div class="absolute w-2 h-2 bg-sky-500 rounded-full"></div>
       </div>
     `;
 
@@ -324,17 +342,41 @@ export const TrackingMap = ({
     }
   }, [mapLoaded]);
 
+  // Get origin/destination from shipment
+  const getOriginDestination = (shipment: Shipment) => {
+    const originAddr = (shipment.origin_address || {}) as Record<string, string | number>;
+    const destAddr = (shipment.destination_address || {}) as Record<string, string | number>;
+    
+    return {
+      origin: {
+        lat: shipment.origin_lat ?? (originAddr.lat as number) ?? 0,
+        lng: shipment.origin_lng ?? (originAddr.lng as number) ?? 0,
+        city: (originAddr.city as string) || 'Unknown',
+        country: (originAddr.country as string) || '',
+      },
+      destination: {
+        lat: shipment.destination_lat ?? (destAddr.lat as number) ?? 0,
+        lng: shipment.destination_lng ?? (destAddr.lng as number) ?? 0,
+        city: (destAddr.city as string) || 'Unknown',
+        country: (destAddr.country as string) || '',
+      },
+      current: {
+        lat: shipment.current_lat ?? shipment.origin_lat ?? 0,
+        lng: shipment.current_lng ?? shipment.origin_lng ?? 0,
+        heading: shipment.current_heading ?? 0,
+      },
+    };
+  };
+
   // Initial setup when shipment data changes
   useEffect(() => {
     if (!shipment || !map.current || !mapLoaded) return;
 
-    const lat = shipment.current_lat ?? shipment.current.lat;
-    const lng = shipment.current_lng ?? shipment.current.lng;
-    const shipmentHeading = shipment.current_heading ?? shipment.current.heading;
+    const { origin, destination, current } = getOriginDestination(shipment);
 
-    if (lat && lng) {
+    if (current.lat && current.lng) {
       // Initial marker creation (no animation)
-      updateMarker(lat, lng, shipmentHeading, shipment.transport_mode, false);
+      updateMarker(current.lat, current.lng, current.heading, shipment.transport_mode as TransportMode, false);
     }
 
     // Build route from tracking history
@@ -342,10 +384,10 @@ export const TrackingMap = ({
       const routeCoords: [number, number][] = trackingHistory.map(log => [log.lng, log.lat]);
       
       // Add current position if not in history
-      if (lat && lng) {
+      if (current.lat && current.lng) {
         const lastPoint = routeCoords[routeCoords.length - 1];
-        if (lastPoint && (lastPoint[0] !== lng || lastPoint[1] !== lat)) {
-          routeCoords.push([lng, lat]);
+        if (lastPoint && (lastPoint[0] !== current.lng || lastPoint[1] !== current.lat)) {
+          routeCoords.push([current.lng, current.lat]);
         }
       }
 
@@ -356,8 +398,8 @@ export const TrackingMap = ({
       routeCoords.forEach(coord => bounds.extend(coord));
       
       // Include origin and destination
-      bounds.extend([shipment.origin.lng, shipment.origin.lat]);
-      bounds.extend([shipment.destination.lng, shipment.destination.lat]);
+      bounds.extend([origin.lng, origin.lat]);
+      bounds.extend([destination.lng, destination.lat]);
 
       map.current.fitBounds(bounds, {
         padding: BOUNDS_PADDING,
@@ -371,24 +413,57 @@ export const TrackingMap = ({
     if (!shipment || !map.current || !mapLoaded || !targetPosition) return;
 
     const [targetLat, targetLng] = targetPosition;
-    const currentLat = currentPositionRef.current?.[0] ?? shipment.current_lat ?? shipment.current.lat;
-    const currentLng = currentPositionRef.current?.[1] ?? shipment.current_lng ?? shipment.current.lng;
+    const currentLat = currentPositionRef.current?.[0] ?? shipment.current_lat ?? 0;
+    const currentLng = currentPositionRef.current?.[1] ?? shipment.current_lng ?? 0;
 
     // Only update if position has actually changed
     if (targetLat !== currentLat || targetLng !== currentLng) {
-      updateMarker(targetLat, targetLng, heading, shipment.transport_mode, true);
+      updateMarker(targetLat, targetLng, heading, shipment.transport_mode as TransportMode, true);
     }
   }, [targetPosition, heading, shipment, mapLoaded, updateMarker]);
 
   // Helper function to get transport icon SVG
-  const getTransportIconSvg = (mode: TransportMode): string => {
+  const getTransportIconSvg = (mode: TransportMode, planeSvg: string = ''): string => {
+    // Use plane SVG for air mode if available
+    if (mode === 'air' && planeSvg) {
+      return planeSvg;
+    }
+    
     const icons: Record<TransportMode, string> = {
       air: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>',
       ocean: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 16.5c.65 0 1.25-.25 1.7-.7 1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7V14c-.65 0-1.25-.25-1.7-.7-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7v2.5zM2 11c.65 0 1.25-.25 1.7-.7 1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7V8.5c-.65 0-1.25-.25-1.7-.7-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7V11z"/></svg>',
       road: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 18.5c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5-1.5.67-1.5 1.5.67 1.5 1.5 1.5zM6 18.5c.83 0 1.5-.67 1.5-1.5S6.83 15.5 6 15.5 4.5 16.17 4.5 17s.67 1.5 1.5 1.5zM17 11h-1V8h-2v3H8V8H6v3H5c-1.66 0-3 1.34-3 3v7h2.5v-2h11v2H20v-7c0-1.66-1.34-3-3-3z"/></svg>',
       rail: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h12v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>',
+      multimodal: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8 2 4 2.5 4 6v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h12v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>',
     };
     return icons[mode];
+  };
+
+  // Helper to get origin/destination for display
+  const getShipmentInfo = (shipment: Shipment) => {
+    const originAddr = (shipment.origin_address || {}) as Record<string, string>;
+    const destAddr = (shipment.destination_address || {}) as Record<string, string>;
+    
+    return {
+      origin: {
+        city: originAddr.city || 'Unknown',
+        country: originAddr.country || '',
+        lat: shipment.origin_lat ?? 0,
+        lng: shipment.origin_lng ?? 0,
+      },
+      destination: {
+        city: destAddr.city || 'Unknown',
+        country: destAddr.country || '',
+        lat: shipment.destination_lat ?? 0,
+        lng: shipment.destination_lng ?? 0,
+      },
+      current: {
+        lat: shipment.current_lat ?? 0,
+        lng: shipment.current_lng ?? 0,
+        heading: shipment.current_heading ?? 0,
+      },
+      eta: shipment.delivery_date,
+    };
   };
 
   return (
@@ -415,32 +490,39 @@ export const TrackingMap = ({
               {shipment.tracking_number}
             </div>
             
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">From</span>
-                <span className="text-sm font-medium">{shipment.origin.city}, {shipment.origin.country}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">To</span>
-                <span className="text-sm font-medium">{shipment.destination.city}, {shipment.destination.country}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">Mode</span>
-                <span className="text-sm font-medium capitalize">{shipment.transport_mode}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-slate-400">ETA</span>
-                <span className="text-sm font-medium">
-                  {new Date(shipment.estimated_arrival).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
+            {(() => {
+              const info = getShipmentInfo(shipment);
+              return (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-400">From</span>
+                    <span className="text-sm font-medium">{info.origin.city}, {info.origin.country}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-400">To</span>
+                    <span className="text-sm font-medium">{info.destination.city}, {info.destination.country}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-slate-400">Mode</span>
+                    <span className="text-sm font-medium capitalize">{shipment.transport_mode}</span>
+                  </div>
+                  {info.eta && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-slate-400">ETA</span>
+                      <span className="text-sm font-medium">
+                        {new Date(info.eta).toLocaleDateString()}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Progress bar */}
             <div className="mt-4">
               <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-gradient-to-r from-orange-500 to-orange-400 transition-all duration-500"
+                  className="h-full bg-gradient-to-r from-sky-500 to-sky-400 transition-all duration-500"
                   style={{ width: `${calculateProgress(shipment)}%` }}
                 />
               </div>
@@ -457,7 +539,7 @@ export const TrackingMap = ({
       {!mapLoaded && (
         <div className="absolute inset-0 flex items-center justify-center bg-slate-900">
           <div className="flex flex-col items-center gap-4">
-            <div className="w-8 h-8 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
             <span className="text-sm text-slate-400">Loading map...</span>
           </div>
         </div>
@@ -468,14 +550,14 @@ export const TrackingMap = ({
 
 // Calculate shipment progress
 function calculateProgress(shipment: Shipment): number {
-  const lat = shipment.current_lat ?? shipment.current.lat;
-  const lng = shipment.current_lng ?? shipment.current.lng;
+  const lat = shipment.current_lat ?? 0;
+  const lng = shipment.current_lng ?? 0;
   
   if (!lat || !lng) return 0;
   
   // Simple distance-based progress calculation
-  const origin = { lat: shipment.origin.lat, lng: shipment.origin.lng };
-  const dest = { lat: shipment.destination.lat, lng: shipment.destination.lng };
+  const origin = { lat: shipment.origin_lat ?? 0, lng: shipment.origin_lng ?? 0 };
+  const dest = { lat: shipment.destination_lat ?? 0, lng: shipment.destination_lng ?? 0 };
   const current = { lat, lng };
   
   const totalDistance = calculateDistance(origin, dest);

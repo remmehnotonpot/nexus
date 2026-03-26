@@ -97,9 +97,9 @@ export const Header = ({ transparent = false }: HeaderProps) => {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 group">
             <img 
-              src={showTransparent ? "/logo-white.svg" : "/logo.svg"} 
+              src="/logo.png" 
               alt="Swish Portal" 
-              className="h-8 w-auto"
+              className="h-10 w-auto"
             />
           </Link>
 

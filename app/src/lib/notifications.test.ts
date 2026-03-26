@@ -6,17 +6,17 @@ import {
   NotificationManager,
   startNotificationSimulation
 } from './notifications';
-import type { StatusChangeEvent } from '@/types';
+import type { StatusChangeEvent } from './notifications';
 
 describe('Notification System', () => {
   describe('createStatusNotification', () => {
     it('creates status notification', () => {
       const event: StatusChangeEvent = {
         previousStatus: 'pending',
-        newStatus: 'in-transit',
+        newStatus: 'in_transit',
         shipmentId: 'ship-123',
         trackingNumber: 'NXS-TEST-001',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         location: 'Shanghai',
       };
 
@@ -31,11 +31,11 @@ describe('Notification System', () => {
 
     it('creates customs notification', () => {
       const event: StatusChangeEvent = {
-        previousStatus: 'in-transit',
+        previousStatus: 'in_transit',
         newStatus: 'customs',
         shipmentId: 'ship-123',
         trackingNumber: 'NXS-TEST-001',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
 
       const notification = createStatusNotification(event);
@@ -46,11 +46,11 @@ describe('Notification System', () => {
 
     it('creates delivered notification', () => {
       const event: StatusChangeEvent = {
-        previousStatus: 'out-for-delivery',
+        previousStatus: 'out_for_delivery',
         newStatus: 'delivered',
         shipmentId: 'ship-123',
         trackingNumber: 'NXS-TEST-001',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
         location: 'Los Angeles',
       };
 
@@ -60,19 +60,19 @@ describe('Notification System', () => {
       expect(notification.title).toBe('Shipment Delivered');
     });
 
-    it('creates delayed notification', () => {
+    it('creates exception notification', () => {
       const event: StatusChangeEvent = {
-        previousStatus: 'in-transit',
-        newStatus: 'delayed',
+        previousStatus: 'in_transit',
+        newStatus: 'exception',
         shipmentId: 'ship-123',
         trackingNumber: 'NXS-TEST-001',
-        timestamp: new Date(),
+        timestamp: new Date().toISOString(),
       };
 
       const notification = createStatusNotification(event);
 
       expect(notification.type).toBe('delay-alert');
-      expect(notification.title).toBe('Shipment Delayed');
+      expect(notification.title).toBe('Shipment Exception');
     });
   });
 
@@ -125,8 +125,8 @@ describe('Notification System', () => {
       const notifications = simulateNotifications(5);
 
       for (let i = 1; i < notifications.length; i++) {
-        expect(notifications[i - 1].timestamp.getTime()).toBeGreaterThanOrEqual(
-          notifications[i].timestamp.getTime()
+        expect(new Date(notifications[i - 1].timestamp).getTime()).toBeGreaterThanOrEqual(
+          new Date(notifications[i].timestamp).getTime()
         );
       }
     });

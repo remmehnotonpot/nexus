@@ -8,7 +8,9 @@ import {
   AlertCircle,
   CheckCircle,
   Navigation,
-  Truck
+  Truck,
+  Building2,
+  Globe
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,8 +18,10 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { updateShipmentLocation } from '@/lib/api/shipments';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { updateShipmentLocation, recordTrackingUpdate } from '@/lib/api/shipments';
 import { locationSchema } from '@/lib/schemas/shipment';
+import { LocationAutocomplete, ExtractedLocation } from '@/components/LocationAutocomplete';
 import type { Shipment } from '@/types';
 
 interface DriverPingSimulatorProps {
@@ -27,6 +31,8 @@ interface DriverPingSimulatorProps {
   onLocationUpdate?: (lat: number, lng: number) => void;
   /** Optional className */
   className?: string;
+  /** User ID for tracking who made the update */
+  userId?: string;
 }
 
 export interface DriverPingSimulatorRef {
@@ -39,6 +45,7 @@ export interface DriverPingSimulatorRef {
  * 
  * Allows administrators to manually update shipment coordinates by:
  * - Clicking on a map to set position
+ * - Using location autocomplete (hybrid internal + global search)
  * - Inputting exact coordinates
  * - Using current geolocation
  * 
@@ -46,11 +53,16 @@ export interface DriverPingSimulatorRef {
  * the Supabase Realtime update that clients will receive.
  */
 export const DriverPingSimulator = forwardRef<DriverPingSimulatorRef, DriverPingSimulatorProps>(
-  function DriverPingSimulator({ shipment, onLocationUpdate, className = '' }, ref) {
-    // Form state
+  function DriverPingSimulator({ shipment, onLocationUpdate, className = '', userId }, ref) {
+    // Tab state
+    const [activeTab, setActiveTab] = useState<'autocomplete' | 'manual'>('autocomplete');
+    
+    // Location state
+    const [selectedLocation, setSelectedLocation] = useState<ExtractedLocation | null>(null);
     const [latitude, setLatitude] = useState('');
     const [longitude, setLongitude] = useState('');
     const [heading, setHeading] = useState('0');
+    const [notes, setNotes] = useState('');
     
     // Status state
     const [isUpdating, setIsUpdating] = useState(false);
@@ -88,8 +100,35 @@ export const DriverPingSimulator = forwardRef<DriverPingSimulatorRef, DriverPing
       setCoordinatesFromMap: (lat: number, lng: number) => {
         setLatitude(lat.toFixed(6));
         setLongitude(lng.toFixed(6));
+        setActiveTab('manual');
+        setSelectedLocation(null);
       },
     }));
+
+    // Handle location selection from autocomplete
+    const handleLocationSelect = useCallback((location: ExtractedLocation | null) => {
+      setSelectedLocation(location);
+      if (location) {
+        setLatitude(location.lat.toFixed(6));
+        setLongitude(location.lng.toFixed(6));
+      }
+    }, []);
+
+    /**
+     * Get origin/destination coordinates from shipment
+     */
+    const getShipmentCoordinates = (shipment: Shipment) => {
+      return {
+        origin: {
+          lat: shipment.origin_lat ?? 0,
+          lng: shipment.origin_lng ?? 0,
+        },
+        destination: {
+          lat: shipment.destination_lat ?? 0,
+          lng: shipment.destination_lng ?? 0,
+        },
+      };
+    };
 
     /**
      * Validate and submit location update
@@ -126,9 +165,23 @@ export const DriverPingSimulator = forwardRef<DriverPingSimulatorRef, DriverPing
         // Update shipment location in Supabase
         await updateShipmentLocation(shipment.id, lat, lng, headingValue);
 
+        // Record tracking update for audit trail
+        await recordTrackingUpdate(
+          shipment.id,
+          lat,
+          lng,
+          'manual_update',
+          { heading: headingValue },
+          userId
+        );
+
         setUpdateStatus('success');
         setStatusMessage(`Location updated to ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
         setLastPingTime(new Date());
+
+        // Clear form
+        setSelectedLocation(null);
+        setNotes('');
 
         // Notify parent component
         onLocationUpdate?.(lat, lng);
@@ -140,7 +193,7 @@ export const DriverPingSimulator = forwardRef<DriverPingSimulatorRef, DriverPing
         setIsUpdating(false);
         clearStatusAfterDelay();
       }
-    }, [shipment, latitude, longitude, heading, onLocationUpdate, clearStatusAfterDelay]);
+    }, [shipment, latitude, longitude, heading, notes, userId, onLocationUpdate, clearStatusAfterDelay]);
 
     /**
      * Use browser geolocation to fill coordinates
@@ -157,10 +210,21 @@ export const DriverPingSimulator = forwardRef<DriverPingSimulatorRef, DriverPing
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setLatitude(position.coords.latitude.toFixed(6));
-          setLongitude(position.coords.longitude.toFixed(6));
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          setLatitude(lat.toFixed(6));
+          setLongitude(lng.toFixed(6));
           setHeading(position.coords.heading?.toString() || '0');
           setIsGettingLocation(false);
+          setActiveTab('manual');
+          
+          // Also update selected location
+          setSelectedLocation({
+            name: 'Current Location',
+            lat,
+            lng,
+            source: 'photon_api',
+          });
         },
         (error) => {
           console.error('Geolocation error:', error);
@@ -179,23 +243,27 @@ export const DriverPingSimulator = forwardRef<DriverPingSimulatorRef, DriverPing
     const applyPreset = useCallback((preset: 'origin' | 'destination' | 'midpoint') => {
       if (!shipment) return;
 
+      const coords = getShipmentCoordinates(shipment);
+
       switch (preset) {
         case 'origin':
-          setLatitude(shipment.origin.lat.toFixed(6));
-          setLongitude(shipment.origin.lng.toFixed(6));
+          setLatitude(coords.origin.lat.toFixed(6));
+          setLongitude(coords.origin.lng.toFixed(6));
           break;
         case 'destination':
-          setLatitude(shipment.destination.lat.toFixed(6));
-          setLongitude(shipment.destination.lng.toFixed(6));
+          setLatitude(coords.destination.lat.toFixed(6));
+          setLongitude(coords.destination.lng.toFixed(6));
           break;
         case 'midpoint':
           // Calculate midpoint between origin and destination
-          const midLat = (shipment.origin.lat + shipment.destination.lat) / 2;
-          const midLng = (shipment.origin.lng + shipment.destination.lng) / 2;
+          const midLat = (coords.origin.lat + coords.destination.lat) / 2;
+          const midLng = (coords.origin.lng + coords.destination.lng) / 2;
           setLatitude(midLat.toFixed(6));
           setLongitude(midLng.toFixed(6));
           break;
       }
+      setActiveTab('manual');
+      setSelectedLocation(null);
     }, [shipment]);
 
     const isFormValid = latitude && longitude && 
@@ -274,87 +342,127 @@ export const DriverPingSimulator = forwardRef<DriverPingSimulatorRef, DriverPing
             </div>
           )}
 
-          {/* Coordinate form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          {/* Main Form with Tabs */}
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'autocomplete' | 'manual')}>
+            <TabsList className="grid w-full grid-cols-2 bg-slate-800">
+              <TabsTrigger value="autocomplete" className="data-[state=active]:bg-slate-700">
+                <Building2 className="w-4 h-4 mr-2" />
+                Search
+              </TabsTrigger>
+              <TabsTrigger value="manual" className="data-[state=active]:bg-slate-700">
+                <Globe className="w-4 h-4 mr-2" />
+                Manual
+              </TabsTrigger>
+            </TabsList>
+
+            <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+              <TabsContent value="autocomplete" className="mt-0">
+                <LocationAutocomplete
+                  value={selectedLocation}
+                  onChange={handleLocationSelect}
+                  placeholder={shipment ? "Search for a location..." : "Select a shipment first"}
+                  disabled={!shipment}
+                  label="Location"
+                  className="[&_button]:bg-slate-800 [&_button]:border-slate-700 [&_button]:text-white"
+                />
+              </TabsContent>
+
+              <TabsContent value="manual" className="mt-0 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="latitude" className="text-slate-300">Latitude</Label>
+                    <Input
+                      id="latitude"
+                      type="number"
+                      step="any"
+                      min="-90"
+                      max="90"
+                      placeholder="e.g., 31.2304"
+                      value={latitude}
+                      onChange={(e) => setLatitude(e.target.value)}
+                      className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                      disabled={!shipment}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="longitude" className="text-slate-300">Longitude</Label>
+                    <Input
+                      id="longitude"
+                      type="number"
+                      step="any"
+                      min="-180"
+                      max="180"
+                      placeholder="e.g., 121.4737"
+                      value={longitude}
+                      onChange={(e) => setLongitude(e.target.value)}
+                      className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
+                      disabled={!shipment}
+                    />
+                  </div>
+                </div>
+              </TabsContent>
+
+              {/* Heading and Notes - visible in both tabs */}
               <div className="space-y-2">
-                <Label htmlFor="latitude" className="text-slate-300">Latitude</Label>
+                <Label htmlFor="heading" className="text-slate-300">Heading (degrees)</Label>
                 <Input
-                  id="latitude"
+                  id="heading"
                   type="number"
-                  step="any"
-                  min="-90"
-                  max="90"
-                  placeholder="e.g., 31.2304"
-                  value={latitude}
-                  onChange={(e) => setLatitude(e.target.value)}
+                  step="1"
+                  min="0"
+                  max="360"
+                  placeholder="0-360"
+                  value={heading}
+                  onChange={(e) => setHeading(e.target.value)}
                   className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
                   disabled={!shipment}
                 />
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="longitude" className="text-slate-300">Longitude</Label>
+                <Label htmlFor="notes" className="text-slate-300">Notes (optional)</Label>
                 <Input
-                  id="longitude"
-                  type="number"
-                  step="any"
-                  min="-180"
-                  max="180"
-                  placeholder="e.g., 121.4737"
-                  value={longitude}
-                  onChange={(e) => setLongitude(e.target.value)}
+                  id="notes"
+                  type="text"
+                  placeholder="Add a note about this update..."
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
                   className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
                   disabled={!shipment}
                 />
               </div>
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="heading" className="text-slate-300">Heading (degrees)</Label>
-              <Input
-                id="heading"
-                type="number"
-                step="1"
-                min="0"
-                max="360"
-                placeholder="0-360"
-                value={heading}
-                onChange={(e) => setHeading(e.target.value)}
-                className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-500"
-                disabled={!shipment}
-              />
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleUseCurrentLocation}
-                disabled={isGettingLocation || !shipment}
-                className="flex-1 bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
-              >
-                {isGettingLocation ? (
-                  <Navigation className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Crosshair className="w-4 h-4 mr-2" />
-                )}
-                My Location
-              </Button>
-              <Button
-                type="submit"
-                disabled={!isFormValid || isUpdating || !shipment}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
-              >
-                {isUpdating ? (
-                  <Navigation className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Send className="w-4 h-4 mr-2" />
-                )}
-                Send Ping
-              </Button>
-            </div>
-          </form>
+              {/* Action buttons */}
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleUseCurrentLocation}
+                  disabled={isGettingLocation || !shipment}
+                  className="flex-1 bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700"
+                >
+                  {isGettingLocation ? (
+                    <Navigation className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Crosshair className="w-4 h-4 mr-2" />
+                  )}
+                  My Location
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={!isFormValid || isUpdating || !shipment}
+                  className="flex-1 bg-orange-500 hover:bg-orange-600 text-white"
+                >
+                  {isUpdating ? (
+                    <Navigation className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Send className="w-4 h-4 mr-2" />
+                  )}
+                  Send Ping
+                </Button>
+              </div>
+            </form>
+          </Tabs>
 
           {/* Last ping info */}
           {lastPingTime && (

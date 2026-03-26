@@ -4,17 +4,24 @@ import { useLiveTracking } from './useLiveTracking';
 
 // Mock Supabase - must be defined inside vi.mock due to hoisting
 vi.mock('@/lib/supabase', () => {
-  const mockChannel = {
-    on: vi.fn(function(_event: string, _config: unknown, callback: (payload: { new: Record<string, unknown>; old: Record<string, unknown> | null }) => void) {
-      (this as { _callback: unknown })._callback = callback;
+  type MockChannel = {
+    on: ReturnType<typeof vi.fn>;
+    subscribe: ReturnType<typeof vi.fn>;
+    unsubscribe: ReturnType<typeof vi.fn>;
+    _callback: ((payload: { new: Record<string, unknown>; old: Record<string, unknown> | null }) => void) | null;
+  };
+
+  const mockChannel: MockChannel = {
+    on: vi.fn(function(this: MockChannel, _event: string, _config: unknown, callback: (payload: { new: Record<string, unknown>; old: Record<string, unknown> | null }) => void) {
+      this._callback = callback;
       return this;
     }),
-    subscribe: vi.fn(function(callback?: (status: string) => void) {
+    subscribe: vi.fn(function(this: MockChannel, callback?: (status: string) => void) {
       if (callback) callback('SUBSCRIBED');
       return this;
     }),
     unsubscribe: vi.fn(),
-    _callback: null as ((payload: { new: Record<string, unknown>; old: Record<string, unknown> | null }) => void) | null,
+    _callback: null,
   };
 
   return {

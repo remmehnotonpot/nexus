@@ -1,4 +1,4 @@
-import Analytics from "@/views/Analytics";
+import { Analytics } from "@/views/Analytics";
 
 export const metadata = {
   title: "Analytics | Swish Portal",

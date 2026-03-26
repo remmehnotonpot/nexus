@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getShipmentByTrackingNumber } from '@/lib/api/shipments';
 import { locationSchema } from '@/lib/schemas/shipment';
-import type { Shipment, TrackingLog, ShipmentStatus, TransportMode } from '@/types';
+import type { Shipment, TrackingLog, ShipmentStatus } from '@/types';
 
 // =====================================================
 // TYPES
@@ -89,10 +89,9 @@ export function useLiveTracking(trackingNumber: string | null): UseLiveTrackingR
       }
 
       // Validate current position data with Zod
-      const positionValidation = locationSchema.safeParse({
-        lat: data.current_lat ?? data.current?.lat,
-        lng: data.current_lng ?? data.current?.lng,
-      });
+      const lat = data.current_lat ?? 0;
+      const lng = data.current_lng ?? 0;
+      const positionValidation = locationSchema.safeParse({ lat, lng });
 
       if (!positionValidation.success) {
         console.warn('Invalid position data received:', positionValidation.error);
@@ -136,14 +135,9 @@ export function useLiveTracking(trackingNumber: string | null): UseLiveTrackingR
 
       return {
         ...prev,
-        current_lat: lat,
-        current_lng: lng,
+        current_lat: lat ?? prev.current_lat,
+        current_lng: lng ?? prev.current_lng,
         current_heading: heading ?? prev.current_heading,
-        current: {
-          lat: lat ?? prev.current.lat,
-          lng: lng ?? prev.current.lng,
-          heading: heading ?? prev.current.heading,
-        },
         status: status ?? prev.status,
         updated_at: new Date().toISOString(),
       };
@@ -232,12 +226,12 @@ export function useLiveTracking(trackingNumber: string | null): UseLiveTrackingR
   // Compute current position from shipment state
   const currentPosition: [number, number] | null = shipment
     ? [
-        shipment.current_lat ?? shipment.current.lat,
-        shipment.current_lng ?? shipment.current.lng,
+        shipment.current_lat ?? shipment.origin_lat ?? 0,
+        shipment.current_lng ?? shipment.origin_lng ?? 0,
       ]
     : null;
 
-  const heading = shipment?.current_heading ?? shipment?.current.heading ?? 0;
+  const heading = shipment?.current_heading ?? 0;
 
   return {
     shipment,

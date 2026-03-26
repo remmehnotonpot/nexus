@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { Shipment, SimulationPath, TransportMode, ShipmentStatus } from '@/types';
+import type { SimulationPath, TransportMode, ShipmentStatus } from '@/types';
 
 // Predefined simulation paths
 export const SIMULATION_PATHS: SimulationPath[] = [
@@ -316,7 +316,7 @@ export function useSimulation(
 // Mock Supabase client for simulation
 export const mockSupabaseClient = {
   from: (table: string) => ({
-    update: (data: Partial<Shipment>) => ({
+    update: (data: unknown) => ({
       eq: async (column: string, value: string) => {
         console.log(`[Mock Supabase] UPDATE ${table} SET`, data, `WHERE ${column} = ${value}`);
         return { data: null, error: null };
@@ -325,7 +325,7 @@ export const mockSupabaseClient = {
     insert: (data: Record<string, unknown>) => ({
       select: async () => {
         console.log(`[Mock Supabase] INSERT INTO ${table}`, data);
-        return { data: null, error: null };
+        return { data: [{ id: 'mock-id', ...data }], error: null };
       },
     }),
     select: async (columns?: string) => {
@@ -357,32 +357,35 @@ export function getTransportIcon(mode: TransportMode): string {
     ocean: 'Ship',
     road: 'Truck',
     rail: 'Train',
+    multimodal: 'Package',
   };
   return icons[mode];
 }
 
-// Helper to get status color
+// Helper to get status color (using new schema status values)
 export function getStatusColor(status: ShipmentStatus): string {
   const colors: Record<ShipmentStatus, string> = {
     pending: 'bg-yellow-500',
-    'in-transit': 'bg-blue-500',
+    in_transit: 'bg-blue-500',
     customs: 'bg-orange-500',
     delivered: 'bg-green-500',
-    delayed: 'bg-red-500',
-    'out-for-delivery': 'bg-purple-500',
+    exception: 'bg-red-500',
+    out_for_delivery: 'bg-purple-500',
+    cancelled: 'bg-gray-500',
   };
   return colors[status];
 }
 
-// Helper to get status label
+// Helper to get status label (using new schema status values)
 export function getStatusLabel(status: ShipmentStatus): string {
   const labels: Record<ShipmentStatus, string> = {
     pending: 'Pending',
-    'in-transit': 'In Transit',
+    in_transit: 'In Transit',
     customs: 'In Customs',
     delivered: 'Delivered',
-    delayed: 'Delayed',
-    'out-for-delivery': 'Out for Delivery',
+    exception: 'Exception',
+    out_for_delivery: 'Out for Delivery',
+    cancelled: 'Cancelled',
   };
   return labels[status];
 }

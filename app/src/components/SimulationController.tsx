@@ -58,8 +58,9 @@ const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: s
     ocean: Ship,
     road: Truck,
     rail: Train,
+    multimodal: Truck,
   };
-  const Icon = icons[mode];
+  const Icon = icons[mode] || Truck;
   return <Icon className={className} />;
 };
 

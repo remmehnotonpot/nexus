@@ -53,24 +53,36 @@ export function calculateDistance(
 }
 
 /**
+ * Get origin/destination/current coordinates from shipment
+ */
+function getShipmentCoordinates(shipment: Shipment) {
+  const originAddr = (shipment.origin_address || {}) as Record<string, string | number>;
+  const destAddr = (shipment.destination_address || {}) as Record<string, string | number>;
+  
+  return {
+    origin: {
+      lat: shipment.origin_lat ?? (originAddr.lat as number) ?? 0,
+      lng: shipment.origin_lng ?? (originAddr.lng as number) ?? 0,
+    },
+    destination: {
+      lat: shipment.destination_lat ?? (destAddr.lat as number) ?? 0,
+      lng: shipment.destination_lng ?? (destAddr.lng as number) ?? 0,
+    },
+    current: {
+      lat: shipment.current_lat ?? shipment.origin_lat ?? 0,
+      lng: shipment.current_lng ?? shipment.origin_lng ?? 0,
+    },
+  };
+}
+
+/**
  * Calculate ETA and delay information for a shipment
  */
 export function calculateETA(
   shipment: Shipment,
   currentSpeedKmh?: number
 ): ETAResult {
-  const origin = {
-    lat: shipment.origin.lat,
-    lng: shipment.origin.lng,
-  };
-  const destination = {
-    lat: shipment.destination.lat,
-    lng: shipment.destination.lng,
-  };
-  const current = {
-    lat: shipment.current_lat ?? shipment.current.lat,
-    lng: shipment.current_lng ?? shipment.current.lng,
-  };
+  const { origin, destination, current } = getShipmentCoordinates(shipment);
 
   // Calculate distances
   const totalDistance = calculateDistance(origin, destination);
@@ -88,6 +100,7 @@ export function calculateETA(
     ocean: 40,
     road: 80,
     rail: 60,
+    multimodal: 50,
   };
 
   const speed = currentSpeedKmh || modeSpeeds[shipment.transport_mode] || 60;
@@ -97,8 +110,8 @@ export function calculateETA(
   const now = new Date();
   const estimatedArrival = new Date(now.getTime() + remainingHours * 60 * 60 * 1000);
 
-  // Check against original ETA
-  const originalETA = new Date(shipment.estimated_arrival);
+  // Check against original ETA (using delivery_date from new schema)
+  const originalETA = shipment.delivery_date ? new Date(shipment.delivery_date) : estimatedArrival;
   const delayMs = estimatedArrival.getTime() - originalETA.getTime();
   const delayHours = Math.max(0, delayMs / (1000 * 60 * 60));
   const isDelayed = delayHours > 0.5; // More than 30 minutes delay

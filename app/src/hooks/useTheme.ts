@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Theme } from '@/types';
+
+export type Theme = 'light' | 'dark' | 'system';
 
 const THEME_STORAGE_KEY = 'swish-theme';
 
@@ -58,7 +59,7 @@ export function useTheme() {
   const setDark = useCallback(() => setTheme('dark'), []);
   const setSystem = useCallback(() => setTheme('system'), []);
   const toggle = useCallback(() => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    setTheme((prev: Theme) => prev === 'dark' ? 'light' : 'dark');
   }, []);
 
   return {

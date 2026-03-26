@@ -12,7 +12,7 @@ export interface NotificationPayload {
   message: string;
   shipmentId?: string;
   trackingNumber?: string;
-  timestamp: Date;
+  timestamp: string;
   isRead: boolean;
 }
 
@@ -21,12 +21,12 @@ export interface StatusChangeEvent {
   newStatus: ShipmentStatus;
   shipmentId: string;
   trackingNumber: string;
-  timestamp: Date;
+  timestamp: string;
   location?: string;
   details?: string;
 }
 
-// Status transition messages
+// Status transition messages (using new schema status values)
 const STATUS_MESSAGES: Record<ShipmentStatus, { 
   title: string; 
   message: (trackingNumber: string, location?: string) => string;
@@ -37,30 +37,35 @@ const STATUS_MESSAGES: Record<ShipmentStatus, {
     message: (tn) => `Shipment ${tn} has been created and is awaiting pickup.`,
     type: 'status-update',
   },
-  'in-transit': {
+  in_transit: {
     title: 'Shipment In Transit',
-    message: (tn, loc) => `Shipment ${tn} is now in transit${loc ? ` near ${loc}` : ''}.`,
+    message: (tn: string, loc?: string) => `Shipment ${tn} is now in transit${loc ? ` near ${loc}` : ''}.`,
     type: 'status-update',
   },
   customs: {
     title: 'Customs Clearance',
-    message: (tn, loc) => `Shipment ${tn} is undergoing customs clearance${loc ? ` at ${loc}` : ''}.`,
+    message: (tn: string, loc?: string) => `Shipment ${tn} is undergoing customs clearance${loc ? ` at ${loc}` : ''}.`,
     type: 'customs-hold',
   },
-  'out-for-delivery': {
+  out_for_delivery: {
     title: 'Out for Delivery',
-    message: (tn, loc) => `Shipment ${tn} is out for delivery${loc ? ` in ${loc}` : ''}!`,
+    message: (tn: string, loc?: string) => `Shipment ${tn} is out for delivery${loc ? ` in ${loc}` : ''}!`,
     type: 'status-update',
   },
   delivered: {
     title: 'Shipment Delivered',
-    message: (tn, loc) => `Shipment ${tn} has been successfully delivered${loc ? ` to ${loc}` : ''}.`,
+    message: (tn: string, loc?: string) => `Shipment ${tn} has been successfully delivered${loc ? ` to ${loc}` : ''}.`,
     type: 'delivery-confirmation',
   },
-  delayed: {
-    title: 'Shipment Delayed',
-    message: (tn) => `Shipment ${tn} has been delayed. Please check tracking details for more information.`,
+  exception: {
+    title: 'Shipment Exception',
+    message: (tn: string) => `Shipment ${tn} has an exception. Please check tracking details for more information.`,
     type: 'delay-alert',
+  },
+  cancelled: {
+    title: 'Shipment Cancelled',
+    message: (tn: string) => `Shipment ${tn} has been cancelled.`,
+    type: 'status-update',
   },
 };
 
@@ -143,7 +148,7 @@ export function simulateNotification(
   return {
     ...base,
     id: generateNotificationId(),
-    timestamp: new Date(),
+    timestamp: new Date().toISOString(),
     isRead: false,
   };
 }
@@ -185,7 +190,7 @@ export function simulateNotifications(count: number = 5): NotificationPayload[] 
   }
 
   // Sort by timestamp, most recent first
-  return notifications.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  return notifications.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
 /**

@@ -48,8 +48,9 @@ const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: s
     ocean: Ship,
     road: Truck,
     rail: Train,
+    multimodal: Truck,
   };
-  const Icon = icons[mode];
+  const Icon = icons[mode] || Truck;
   return <Icon className={className} />;
 };
 
@@ -214,19 +215,22 @@ const AdminControl = () => {
     setSelectedShipment({
       id: shipmentId,
       tracking_number: trackingNumber,
-      status: 'in-transit',
-      origin: { lat: 31.2304, lng: 121.4737, city: 'Shanghai', country: 'China' },
-      destination: { lat: 34.0522, lng: -118.2437, city: 'Los Angeles', country: 'USA' },
-      current: { lat: 31.2304, lng: 121.4737, heading: 45 },
+      status: 'in_transit',
+      origin_address: { street: '', city: 'Shanghai', country: 'China' },
+      destination_address: { street: '', city: 'Los Angeles', country: 'USA' },
+      origin_lat: 31.2304,
+      origin_lng: 121.4737,
+      destination_lat: 34.0522,
+      destination_lng: -118.2437,
       current_lat: 31.2304,
       current_lng: 121.4737,
       current_heading: 45,
       transport_mode: 'ocean',
-      is_live_demo: true,
-      estimated_arrival: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      weight_kg: 1000,
+      delivery_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    });
+    } as unknown as Shipment);
   }, []);
 
   // Handle location update from driver ping

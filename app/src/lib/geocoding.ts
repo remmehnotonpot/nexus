@@ -54,10 +54,11 @@ export interface DistanceResult {
 
 // Transport mode average speeds (km/h)
 const TRANSPORT_SPEEDS: Record<TransportMode, number> = {
-  air: 900,    // Commercial aircraft average
-  ocean: 40,   // Container ship average
-  road: 80,    // Truck average
-  rail: 60,    // Freight train average
+  air: 900,       // Commercial aircraft average
+  ocean: 40,      // Container ship average
+  road: 80,       // Truck average
+  rail: 60,       // Freight train average
+  multimodal: 50, // Average across multiple modes
 };
 
 /**
@@ -273,7 +274,7 @@ export const shipmentFormSchema = z.object({
     country: z.string().min(1, 'Destination country is required'),
     address: z.string().min(1, 'Destination address is required'),
   }),
-  transportMode: z.enum(['air', 'ocean', 'road', 'rail'] as const),
+  transportMode: z.enum(['air', 'ocean', 'road', 'rail', 'multimodal'] as const),
   weightKg: z.number().positive('Weight must be greater than 0').optional(),
   volumeCbm: z.number().positive('Volume must be greater than 0').optional(),
   goodsDescription: z.string().optional(),

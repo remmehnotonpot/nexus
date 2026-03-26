@@ -246,32 +246,54 @@ export function useLiveShipment(): UseLiveShipmentReturn {
     try {
       setSyncStatus('syncing');
       
+      const originLat = path.path_data[0][0];
+      const originLng = path.path_data[0][1];
+      const destLat = path.path_data[path.path_data.length - 1][0];
+      const destLng = path.path_data[path.path_data.length - 1][1];
+
       const shipment = await apiCreateShipment({
         tracking_number: newTrackingNumber,
         status: 'pending',
-        origin: {
-          lat: path.path_data[0][0],
-          lng: path.path_data[0][1],
-          city: path.origin_city,
+        origin_address: {
+          street: '',
+          city: path.origin_city || '',
           country: '',
         },
-        destination: {
-          lat: path.path_data[path.path_data.length - 1][0],
-          lng: path.path_data[path.path_data.length - 1][1],
-          city: path.destination_city,
+        destination_address: {
+          street: '',
+          city: path.destination_city || '',
           country: '',
         },
-        current: {
-          lat: path.path_data[0][0],
-          lng: path.path_data[0][1],
-          heading: 0,
-        },
-        current_lat: path.path_data[0][0],
-        current_lng: path.path_data[0][1],
+        origin_lat: originLat,
+        origin_lng: originLng,
+        destination_lat: destLat,
+        destination_lng: destLng,
+        current_lat: originLat,
+        current_lng: originLng,
         current_heading: 0,
         transport_mode: path.transport_mode,
-        is_live_demo: true,
-        estimated_arrival: new Date(Date.now() + path.estimated_duration_hours * 60 * 60 * 1000).toISOString(),
+        weight_kg: 1000,
+        // Additional fields required by new schema - explicitly set to null
+        additional_charges: null,
+        assigned_driver_id: null,
+        assigned_vehicle_id: null,
+        base_rate: null,
+        cargo_description: null,
+        cargo_type: null,
+        created_by: null,
+        currency: null,
+        customer_id: null,
+        declared_value: null,
+        delivery_date: null,
+        estimated_transit_days: null,
+        fuel_surcharge: null,
+        pickup_date: null,
+        pieces: null,
+        service_type: null,
+        sub_status: null,
+        total_amount: null,
+        updated_by: null,
+        volume_cbm: null,
       });
 
       setShipmentId(shipment.id);
@@ -284,8 +306,8 @@ export function useLiveShipment(): UseLiveShipmentReturn {
       // Add initial tracking log
       addTrackingLog(
         shipment.id,
-        path.path_data[0][0],
-        path.path_data[0][1],
+        originLat,
+        originLng,
         'departure',
         path.origin_city
       );
@@ -355,7 +377,7 @@ export function useLiveShipment(): UseLiveShipmentReturn {
   const start = useCallback(() => {
     startSimulation();
     startBatchProcessing();
-    updateShipmentStatus('in-transit');
+    updateShipmentStatus('in_transit');
     addLog('Simulation started');
   }, [startSimulation, startBatchProcessing, updateShipmentStatus, addLog]);
 

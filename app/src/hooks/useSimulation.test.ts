@@ -138,24 +138,27 @@ describe('useSimulation', () => {
       expect(getTransportIcon('ocean')).toBe('Ship');
       expect(getTransportIcon('road')).toBe('Truck');
       expect(getTransportIcon('rail')).toBe('Train');
+      expect(getTransportIcon('multimodal')).toBe('Package');
     });
 
-    it('returns status colors', () => {
+    it('returns status colors for new schema', () => {
       expect(getStatusColor('pending')).toBe('bg-yellow-500');
-      expect(getStatusColor('in-transit')).toBe('bg-blue-500');
+      expect(getStatusColor('in_transit')).toBe('bg-blue-500');
       expect(getStatusColor('delivered')).toBe('bg-green-500');
-      expect(getStatusColor('delayed')).toBe('bg-red-500');
+      expect(getStatusColor('exception')).toBe('bg-red-500');
       expect(getStatusColor('customs')).toBe('bg-orange-500');
-      expect(getStatusColor('out-for-delivery')).toBe('bg-purple-500');
+      expect(getStatusColor('out_for_delivery')).toBe('bg-purple-500');
+      expect(getStatusColor('cancelled')).toBe('bg-gray-500');
     });
 
-    it('returns status labels', () => {
+    it('returns status labels for new schema', () => {
       expect(getStatusLabel('pending')).toBe('Pending');
-      expect(getStatusLabel('in-transit')).toBe('In Transit');
+      expect(getStatusLabel('in_transit')).toBe('In Transit');
       expect(getStatusLabel('delivered')).toBe('Delivered');
-      expect(getStatusLabel('delayed')).toBe('Delayed');
+      expect(getStatusLabel('exception')).toBe('Exception');
       expect(getStatusLabel('customs')).toBe('In Customs');
-      expect(getStatusLabel('out-for-delivery')).toBe('Out for Delivery');
+      expect(getStatusLabel('out_for_delivery')).toBe('Out for Delivery');
+      expect(getStatusLabel('cancelled')).toBe('Cancelled');
     });
   });
 });

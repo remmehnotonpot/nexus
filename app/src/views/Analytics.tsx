@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Package, 
   TrendingUp, 
@@ -15,126 +15,35 @@ import {
   ArrowDownRight,
   Activity,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Loader2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Skeleton } from '@/components/ui/skeleton';
 import { calculateETA, formatRemainingTime, getDelaySeverityBadge } from '@/lib/eta';
+import { getShipments } from '@/lib/api/shipments';
 import type { Shipment, TrackingLog, TransportMode } from '@/types';
 
-// Mock data for analytics
-const MOCK_SHIPMENTS: Shipment[] = [
-  {
-    id: '1',
-    tracking_number: 'NXS-DEMO-001',
-    status: 'in-transit',
-    origin: { lat: 31.2304, lng: 121.4737, city: 'Shanghai', country: 'China' },
-    destination: { lat: 34.0522, lng: -118.2437, city: 'Los Angeles', country: 'USA' },
-    current: { lat: 35, lng: 140, heading: 45 },
-    current_lat: 35,
-    current_lng: 140,
-    current_heading: 45,
-    transport_mode: 'ocean',
-    is_live_demo: true,
-    estimated_arrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 15000,
-    volume_cbm: 45.5,
-  },
-  {
-    id: '2',
-    tracking_number: 'NXS-ABC-123',
-    status: 'delivered',
-    origin: { lat: 51.9244, lng: 4.4777, city: 'Rotterdam', country: 'Netherlands' },
-    destination: { lat: 40.7128, lng: -74.006, city: 'New York', country: 'USA' },
-    current: { lat: 40.7128, lng: -74.006, heading: 0 },
-    current_lat: 40.7128,
-    current_lng: -74.006,
-    current_heading: 0,
-    transport_mode: 'ocean',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    actual_arrival: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 25000,
-    volume_cbm: 80,
-  },
-  {
-    id: '3',
-    tracking_number: 'NXS-XYZ-789',
-    status: 'delayed',
-    origin: { lat: 25.2048, lng: 55.2708, city: 'Dubai', country: 'UAE' },
-    destination: { lat: 51.5074, lng: -0.1278, city: 'London', country: 'UK' },
-    current: { lat: 42, lng: 20, heading: 90 },
-    current_lat: 42,
-    current_lng: 20,
-    current_heading: 90,
-    transport_mode: 'air',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 5000,
-    volume_cbm: 25,
-  },
-  {
-    id: '4',
-    tracking_number: 'NXS-TEST-456',
-    status: 'in-transit',
-    origin: { lat: 1.3521, lng: 103.8198, city: 'Singapore', country: 'Singapore' },
-    destination: { lat: -33.8688, lng: 151.2093, city: 'Sydney', country: 'Australia' },
-    current: { lat: -15, lng: 120, heading: 180 },
-    current_lat: -15,
-    current_lng: 120,
-    current_heading: 180,
-    transport_mode: 'ocean',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 12000,
-    volume_cbm: 35,
-  },
-  {
-    id: '5',
-    tracking_number: 'NXS-RAIL-001',
-    status: 'pending',
-    origin: { lat: 22.3193, lng: 114.1694, city: 'Hong Kong', country: 'China' },
-    destination: { lat: 53.5511, lng: 9.9937, city: 'Hamburg', country: 'Germany' },
-    current: { lat: 22.3193, lng: 114.1694, heading: 0 },
-    current_lat: 22.3193,
-    current_lng: 114.1694,
-    current_heading: 0,
-    transport_mode: 'rail',
-    is_live_demo: false,
-    estimated_arrival: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-    weight_kg: 30000,
-    volume_cbm: 120,
-  },
-];
-
 const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: string }) => {
-  const icons: Record<TransportMode, React.ElementType> = {
-    air: Plane,
-    ocean: Ship,
-    road: Truck,
-    rail: Train,
+  const icons: Record<TransportMode, React.ReactNode> = {
+    air: <Plane className={className} />,
+    ocean: <Ship className={className} />,
+    road: <Truck className={className} />,
+    rail: <Train className={className} />,
+    multimodal: <Ship className={className} />,
   };
-  const Icon = icons[mode];
-  return <Icon className={className} />;
+  return icons[mode] || <Ship className={className} />;
 };
 
 interface AnalyticsStats {
   totalShipments: number;
   activeShipments: number;
   deliveredShipments: number;
-  delayedShipments: number;
+  exceptionShipments: number;
   deliveryRate: number;
   averageTransitTime: number;
   totalWeight: number;
@@ -151,23 +60,44 @@ interface RoutePerformance {
 }
 
 export function Analytics() {
-  const [shipments] = useState<Shipment[]>(MOCK_SHIPMENTS);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Calculate analytics statistics
+  // Fetch real data from API
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getShipments();
+        setShipments(data);
+      } catch (err) {
+        setError('Failed to load analytics data. Please try again later.');
+        console.error('Error fetching shipments:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  // Calculate analytics statistics from real data
   const stats: AnalyticsStats = useMemo(() => {
     const total = shipments.length;
-    const active = shipments.filter(s => s.status === 'in-transit').length;
+    const active = shipments.filter(s => s.status === 'in_transit').length;
     const delivered = shipments.filter(s => s.status === 'delivered').length;
-    const delayed = shipments.filter(s => s.status === 'delayed').length;
+    const exceptions = shipments.filter(s => s.status === 'exception').length;
     const deliveryRate = total > 0 ? (delivered / total) * 100 : 0;
     
     const deliveredWithDates = shipments.filter(s => 
-      s.status === 'delivered' && s.actual_arrival && s.created_at
-    );
+      s.status === 'delivered' && s.delivery_date && s.created_at
+    ) as Array<Shipment & { delivery_date: string; created_at: string }>;
+    
     const avgTransitTime = deliveredWithDates.length > 0
       ? deliveredWithDates.reduce((acc, s) => {
           const created = new Date(s.created_at).getTime();
-          const delivered = new Date(s.actual_arrival!).getTime();
+          const delivered = new Date(s.delivery_date).getTime();
           return acc + (delivered - created) / (1000 * 60 * 60 * 24);
         }, 0) / deliveredWithDates.length
       : 0;
@@ -179,7 +109,7 @@ export function Analytics() {
       totalShipments: total,
       activeShipments: active,
       deliveredShipments: delivered,
-      delayedShipments: delayed,
+      exceptionShipments: exceptions,
       deliveryRate,
       averageTransitTime: avgTransitTime,
       totalWeight,
@@ -187,22 +117,23 @@ export function Analytics() {
     };
   }, [shipments]);
 
-  // Calculate top routes
+  // Calculate top routes from real data
   const topRoutes: RoutePerformance[] = useMemo(() => {
     const routeMap = new Map<string, RoutePerformance & { totalTime: number; onTimeCount: number }>();
 
     shipments.forEach(shipment => {
-      const key = `${shipment.origin.city}-${shipment.destination.city}`;
+      const originAddr = (shipment.origin_address || {}) as Record<string, string>;
+      const destAddr = (shipment.destination_address || {}) as Record<string, string>;
+      const key = `${originAddr.city}-${destAddr.city}`;
       const existing = routeMap.get(key);
       
       let transitTime = 0;
       let isOnTime = true;
       
-      if (shipment.actual_arrival && shipment.estimated_arrival) {
-        const actual = new Date(shipment.actual_arrival).getTime();
-        const estimated = new Date(shipment.estimated_arrival).getTime();
-        transitTime = (actual - new Date(shipment.created_at).getTime()) / (1000 * 60 * 60 * 24);
-        isOnTime = actual <= estimated;
+      if (shipment.status === 'delivered' && shipment.delivery_date && shipment.created_at) {
+        const delivery = new Date(shipment.delivery_date).getTime();
+        transitTime = (delivery - new Date(shipment.created_at).getTime()) / (1000 * 60 * 60 * 24);
+        isOnTime = true;
       }
 
       if (existing) {
@@ -213,9 +144,9 @@ export function Analytics() {
         existing.onTimeRate = (existing.onTimeCount / existing.shipmentCount) * 100;
       } else {
         routeMap.set(key, {
-          origin: shipment.origin.city ?? 'Unknown',
-          destination: shipment.destination.city ?? 'Unknown',
-          transportMode: shipment.transport_mode,
+          origin: (originAddr.city as string) ?? 'Unknown',
+          destination: (destAddr.city as string) ?? 'Unknown',
+          transportMode: shipment.transport_mode as TransportMode,
           shipmentCount: 1,
           avgTransitTime: transitTime,
           onTimeRate: isOnTime ? 100 : 0,
@@ -230,23 +161,59 @@ export function Analytics() {
       .slice(0, 5);
   }, [shipments]);
 
-  // Transport mode breakdown
+  // Transport mode breakdown from real data
   const transportBreakdown = useMemo(() => {
     const breakdown: Record<TransportMode, { count: number; weight: number; volume: number }> = {
       air: { count: 0, weight: 0, volume: 0 },
       ocean: { count: 0, weight: 0, volume: 0 },
       road: { count: 0, weight: 0, volume: 0 },
       rail: { count: 0, weight: 0, volume: 0 },
+      multimodal: { count: 0, weight: 0, volume: 0 },
     };
 
     shipments.forEach(s => {
-      breakdown[s.transport_mode].count++;
-      breakdown[s.transport_mode].weight += s.weight_kg || 0;
-      breakdown[s.transport_mode].volume += s.volume_cbm || 0;
+      const mode = s.transport_mode as TransportMode;
+      if (breakdown[mode]) {
+        breakdown[mode].count++;
+        breakdown[mode].weight += s.weight_kg || 0;
+        breakdown[mode].volume += s.volume_cbm || 0;
+      }
     });
 
     return breakdown;
   }, [shipments]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 pt-20 pb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center gap-3 mb-8">
+            <Skeleton className="h-8 w-8" />
+            <Skeleton className="h-8 w-64" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            {[...Array(4)].map((_, i) => (
+              <Skeleton key={i} className="h-32" />
+            ))}
+          </div>
+          <Skeleton className="h-96" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-slate-950 pt-20 pb-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <Alert variant="destructive" className="max-w-md mx-auto mt-20">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 pt-20 pb-12">
@@ -332,15 +299,15 @@ export function Analytics() {
             <CardContent className="pt-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-slate-400">Delayed</p>
-                  <p className="text-3xl font-bold text-white">{stats.delayedShipments}</p>
+                  <p className="text-sm text-slate-400">Exceptions</p>
+                  <p className="text-3xl font-bold text-white">{stats.exceptionShipments}</p>
                 </div>
                 <div className="p-3 bg-red-500/10 rounded-lg">
                   <AlertCircle className="w-6 h-6 text-red-500" />
                 </div>
               </div>
               <div className="flex items-center gap-2 mt-4 text-sm">
-                {stats.delayedShipments > 0 ? (
+                {stats.exceptionShipments > 0 ? (
                   <span className="text-red-400 flex items-center">
                     <ArrowDownRight className="w-4 h-4 mr-1" />
                     Requires attention
@@ -408,8 +375,8 @@ export function Analytics() {
                     {[
                       { label: 'In Transit', value: stats.activeShipments, color: 'bg-blue-500', total: stats.totalShipments },
                       { label: 'Delivered', value: stats.deliveredShipments, color: 'bg-green-500', total: stats.totalShipments },
-                      { label: 'Delayed', value: stats.delayedShipments, color: 'bg-red-500', total: stats.totalShipments },
-                      { label: 'Pending', value: stats.totalShipments - stats.activeShipments - stats.deliveredShipments - stats.delayedShipments, color: 'bg-yellow-500', total: stats.totalShipments },
+                      { label: 'Exceptions', value: stats.exceptionShipments, color: 'bg-red-500', total: stats.totalShipments },
+                      { label: 'Pending', value: Math.max(0, stats.totalShipments - stats.activeShipments - stats.deliveredShipments - stats.exceptionShipments), color: 'bg-yellow-500', total: stats.totalShipments },
                     ].map((item) => (
                       <div key={item.label} className="flex items-center gap-3">
                         <div className={`w-3 h-3 rounded-full ${item.color}`} />
@@ -444,38 +411,45 @@ export function Analytics() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {topRoutes.map((route, index) => (
-                    <div 
-                      key={index}
-                      className="flex items-center justify-between p-4 bg-slate-800 rounded-lg"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center justify-center w-10 h-10 bg-slate-700 rounded-full">
-                          <span className="text-white font-bold">{index + 1}</span>
+                {topRoutes.length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <MapPin className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No route data available yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {topRoutes.map((route, index) => (
+                      <div 
+                        key={index}
+                        className="flex items-center justify-between p-4 bg-slate-800 rounded-lg"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className="flex items-center justify-center w-10 h-10 bg-slate-700 rounded-full">
+                            <span className="text-white font-bold">{index + 1}</span>
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2 text-white">
+                              <span>{route.origin}</span>
+                              <TrendingUp className="w-4 h-4 text-slate-500" />
+                              <span>{route.destination}</span>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-slate-400">
+                              <TransportIcon mode={route.transportMode} className="w-4 h-4" />
+                              <span className="capitalize">{route.transportMode}</span>
+                              <span className="mx-1">•</span>
+                              <span>{route.shipmentCount} shipments</span>
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="flex items-center gap-2 text-white">
-                            <span>{route.origin}</span>
-                            <TrendingUp className="w-4 h-4 text-slate-500" />
-                            <span>{route.destination}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-sm text-slate-400">
-                            <TransportIcon mode={route.transportMode} className="w-4 h-4" />
-                            <span className="capitalize">{route.transportMode}</span>
-                            <span className="mx-1">•</span>
-                            <span>{route.shipmentCount} shipments</span>
-                          </div>
+                        <div className="text-right">
+                          <div className="text-sm text-slate-400">Avg Transit</div>
+                          <div className="text-white font-medium">{route.avgTransitTime.toFixed(1)} days</div>
+                          <div className="text-xs text-green-400">{route.onTimeRate.toFixed(0)}% on time</div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm text-slate-400">Avg Transit</div>
-                        <div className="text-white font-medium">{route.avgTransitTime.toFixed(1)} days</div>
-                        <div className="text-xs text-green-400">{route.onTimeRate.toFixed(0)}% on time</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -521,48 +495,56 @@ export function Analytics() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {shipments
-                    .filter(s => s.status === 'in-transit' || s.status === 'delayed')
-                    .map(shipment => {
-                      const eta = calculateETA(shipment);
-                      return (
-                        <div 
-                          key={shipment.id}
-                          className="flex items-center justify-between p-4 bg-slate-800 rounded-lg"
-                        >
-                          <div className="flex items-center gap-4">
-                            <div className="p-2 bg-slate-700 rounded-lg">
-                              <TransportIcon mode={shipment.transport_mode} className="w-5 h-5 text-orange-500" />
-                            </div>
-                            <div>
-                              <div className="font-mono text-white">{shipment.tracking_number}</div>
-                              <div className="text-sm text-slate-400">
-                                {shipment.origin.city} → {shipment.destination.city}
+                {shipments.filter(s => s.status === 'in_transit' || s.status === 'exception').length === 0 ? (
+                  <div className="text-center py-12 text-slate-400">
+                    <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>No active shipments</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {shipments
+                      .filter(s => s.status === 'in_transit' || s.status === 'exception')
+                      .map(shipment => {
+                        const eta = calculateETA(shipment);
+                        return (
+                          <div 
+                            key={shipment.id}
+                            className="flex items-center justify-between p-4 bg-slate-800 rounded-lg"
+                          >
+                            <div className="flex items-center gap-4">
+                              <div className="p-2 bg-slate-700 rounded-lg">
+                                <TransportIcon mode={shipment.transport_mode as TransportMode} className="w-5 h-5 text-orange-500" />
+                              </div>
+                              <div>
+                                <div className="font-mono text-white">{shipment.tracking_number}</div>
+                                <div className="text-sm text-slate-400">
+                                  {((shipment.origin_address || {}) as Record<string, string>).city ?? 'Unknown'} → {((shipment.destination_address || {}) as Record<string, string>).city ?? 'Unknown'}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                          <div className="flex items-center gap-6">
-                            <div className="text-right">
-                              <div className="text-sm text-slate-400">Progress</div>
-                              <div className="text-white font-medium">{eta.progressPercentage}%</div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-sm text-slate-400">ETA</div>
-                              <div className="text-white font-medium">
-                                {formatRemainingTime(eta.remainingHours)}
+                            <div className="flex items-center gap-6">
+                              <div className="text-right">
+                                <div className="text-sm text-slate-400">Progress</div>
+                                <div className="text-white font-medium">{eta.progressPercentage}%</div>
                               </div>
-                            </div>
-                            <div>
-                              <Badge className={getDelaySeverityBadge(eta.delaySeverity).className}>
-                                {getDelaySeverityBadge(eta.delaySeverity).label}
-                              </Badge>
+                              <div className="text-right">
+                                <div className="text-sm text-slate-400">ETA</div>
+                                <div className="text-white">{formatRemainingTime(eta.remainingHours)}</div>
+                              </div>
+                              {(() => {
+                                const badge = getDelaySeverityBadge(eta.delaySeverity);
+                                return (
+                                  <Badge variant="outline" className={badge.className}>
+                                    {badge.label}
+                                  </Badge>
+                                );
+                              })()}
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                </div>
+                        );
+                      })}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -571,5 +553,3 @@ export function Analytics() {
     </div>
   );
 }
-
-export default Analytics;

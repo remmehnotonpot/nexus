@@ -24,7 +24,7 @@ export const Footer = () => {
           {/* Brand column */}
           <div className="lg:col-span-2">
             <Link href="/" className="flex items-center gap-2 mb-6">
-              <img src="/logo-white.svg" alt="Swish Portal" className="h-10 w-auto" />
+              <img src="/logo.png" alt="Swish Portal" className="h-10 w-auto" />
             </Link>
             <p className="text-sm mb-6 max-w-xs">
               End-to-end logistics solutions powering global trade. 

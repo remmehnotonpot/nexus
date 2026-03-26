@@ -74,14 +74,14 @@ const TrackingTimeline = ({ history }: { history: TrackingLog[] }) => {
               ? 'bg-orange-500 text-white' 
               : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
           }`}>
-            {getEventIcon(event.event_type)}
+            {getEventIcon(event.event_type || '')}
           </div>
 
           {/* Event content */}
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-900 dark:text-white">
-                {getEventLabel(event.event_type)}
+                {getEventLabel(event.event_type || '')}
               </span>
               <span className="text-xs text-slate-500">
                 {new Date(event.timestamp).toLocaleDateString()} at {new Date(event.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -104,6 +104,7 @@ const TransportIcon = ({ mode, className }: { mode: TransportMode; className?: s
     ocean: Ship,
     road: Truck,
     rail: Train,
+    multimodal: Truck,
   };
   const Icon = icons[mode];
   return <Icon className={className} />;
@@ -277,14 +278,17 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                   <div>
                     <div className="text-sm text-slate-500">Origin</div>
                     <div className="font-medium text-slate-900 dark:text-white">
-                      {shipment.origin.city}, {shipment.origin.country}
+                      {(() => {
+                        const originAddr = (shipment.origin_address || {}) as Record<string, string>;
+                        return `${originAddr.city || 'Unknown'}, ${originAddr.country || 'Unknown'}`;
+                      })()}
                     </div>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3 pl-5">
                   <div className="w-0.5 h-8 bg-slate-200 dark:bg-slate-700" />
-                  <TransportIcon mode={shipment.transport_mode} className="w-5 h-5 text-slate-400" />
+                  <TransportIcon mode={shipment.transport_mode as TransportMode} className="w-5 h-5 text-slate-400" />
                   <span className="text-sm text-slate-500 capitalize">{shipment.transport_mode} Freight</span>
                 </div>
 
@@ -295,7 +299,10 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                   <div>
                     <div className="text-sm text-slate-500">Destination</div>
                     <div className="font-medium text-slate-900 dark:text-white">
-                      {shipment.destination.city}, {shipment.destination.country}
+                      {(() => {
+                        const destAddr = (shipment.destination_address || {}) as Record<string, string>;
+                        return `${destAddr.city || 'Unknown'}, ${destAddr.country || 'Unknown'}`;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -311,7 +318,7 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                     Estimated Arrival
                   </div>
                   <div className="font-medium text-slate-900 dark:text-white">
-                    {new Date(shipment.estimated_arrival).toLocaleDateString()}
+                    {shipment.delivery_date ? new Date(shipment.delivery_date).toLocaleDateString() : 'N/A'}
                   </div>
                 </div>
                 <div>
@@ -357,12 +364,12 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Goods</span>
-                    <span className="text-slate-900 dark:text-white">{shipment.goods_description}</span>
+                    <span className="text-slate-900 dark:text-white">{shipment.cargo_description || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Shipped</span>
                     <span className="text-slate-900 dark:text-white">
-                      {new Date(shipment.created_at).toLocaleDateString()}
+                      {shipment.created_at ? new Date(shipment.created_at).toLocaleDateString() : 'N/A'}
                     </span>
                   </div>
                 </div>
