@@ -14,13 +14,13 @@ export async function getShipmentByTrackingNumber(trackingNumber: string) {
     .from('shipments')
     .select(`
       *,
-      tracking_updates (*)
+      tracking_updates!left (*)
     `)
     .eq('tracking_number', trackingNumber)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return data;
+  return data as Record<string, unknown> | null;
 }
 
 export async function getShipmentsByCustomer(customerId: string) {

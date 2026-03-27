@@ -36,7 +36,7 @@ describe('Shipments API', () => {
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: mockData, error: null }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: mockData, error: null }),
           }),
         }),
       } as unknown as ReturnType<typeof supabase.from>);
@@ -46,16 +46,17 @@ describe('Shipments API', () => {
       expect(result).toEqual(mockData);
     });
 
-    it('throws error for non-existent tracking number', async () => {
+    it('returns null for non-existent tracking number', async () => {
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
-            single: vi.fn().mockResolvedValue({ data: null, error: { message: 'Not found' } }),
+            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
           }),
         }),
       } as unknown as ReturnType<typeof supabase.from>);
 
-      await expect(getShipmentByTrackingNumber('INVALID')).rejects.toThrow();
+      const result = await getShipmentByTrackingNumber('INVALID');
+      expect(result).toBeNull();
     });
   });
 

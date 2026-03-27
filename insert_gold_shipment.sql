@@ -1,6 +1,7 @@
 -- =====================================================
 -- INSERT GOLD SHIPMENT - USA TO BELGIUM (Updated Schema)
 -- Freight Registration Letter: GOLD BARS Shipment
+-- Tracking Number: YTSJ784HNF8N
 -- =====================================================
 
 -- First, ensure we have a customer record for the consignee (Marc Van Daele)
@@ -20,7 +21,7 @@ INSERT INTO customers (
   '+32 3 123 4567',
   '{"street": "Industrielaan 25", "city": "Sint-Niklaas", "postal_code": "9100", "country": "Belgium"}'::jsonb,
   'active',
-  'Consignee for gold shipment NXS-GOLD-TX-BE-001. VIP client - diplomatic delivery required.'
+  'Consignee for gold shipment YTSJ784HNF8N. VIP client - diplomatic delivery required.'
 )
 ON CONFLICT DO NOTHING;
 
@@ -72,7 +73,7 @@ BEGIN
     additional_charges,
     total_amount
   ) VALUES (
-    'NXS-GOLD-TX-BE-001',
+    'YTSJ784HNF8N',         -- YOUR TRACKING NUMBER
     v_customer_id,
     'pending',
     'awaiting_payment',
@@ -217,7 +218,7 @@ BEGIN
       due_date,
       notes
     ) VALUES (
-      'INV-GOLD-TX-BE-001',
+      'INV-YTSJ784HNF8N',
       v_shipment_id,
       v_customer_id,
       26000.00,
@@ -257,7 +258,7 @@ Note: Payment must be made in full prior to release of final shipping documents 
       'shipment',
       v_shipment_id,
       '{
-        "tracking_number": "NXS-GOLD-TX-BE-001",
+        "tracking_number": "YTSJ784HNF8N",
         "shipper": "Eric Steele",
         "consignee": "Marc Van Daele",
         "origin": "Texas, USA",

@@ -17,20 +17,17 @@ export async function getShipmentByTrackingNumber(
     .from('shipments')
     .select(`
       *,
-      tracking_updates (*)
+      tracking_updates!left (*)
     `)
     .eq('tracking_number', trackingNumber)
-    .single();
+    .maybeSingle();
 
   if (error) {
-    if (error.code === 'PGRST116') {
-      return null;
-    }
     console.error('Error fetching shipment:', error);
     throw new DatabaseError('Failed to fetch shipment');
   }
 
-  return data;
+  return data as (Shipment & { tracking_updates: TrackingUpdate[] }) | null;
 }
 
 /**
