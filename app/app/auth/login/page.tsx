@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,14 +11,25 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Package, Eye, EyeOff, Loader2 } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const { login } = useAuth();
+  const searchParams = useSearchParams();
+  const { login, isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+
+  // Get redirect URL from query params, default to /ops/dashboard
+  const redirectTo = searchParams.get('redirectTo') || '/ops/dashboard';
+
+  // Handle redirect when auth state changes
+  useEffect(() => {
+    if (isAuthenticated && !isAuthLoading) {
+      router.push(redirectTo);
+    }
+  }, [isAuthenticated, isAuthLoading, redirectTo, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,8 +44,13 @@ export default function LoginPage() {
       return;
     }
 
-    // Redirect to operations dashboard
-    router.push('/ops/dashboard');
+    // Auth state change will trigger the useEffect above to handle redirect
+    // If profile is missing, auth will fail and we'll stay on the login page
+    setTimeout(() => {
+      // Reset loading state after a delay if we're still on the page
+      // (this happens if profile fetch fails)
+      setIsLoading(false);
+    }, 2000);
   };
 
   return (
@@ -126,5 +142,21 @@ export default function LoginPage() {
         </CardFooter>
       </Card>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
+        <Card className="w-full max-w-md">
+          <CardContent className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </CardContent>
+        </Card>
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

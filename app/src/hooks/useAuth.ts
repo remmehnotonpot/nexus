@@ -45,7 +45,7 @@ export function useAuth(): UseAuthReturn {
       .from('profiles')
       .select('*')
       .eq('id', userId)
-      .single();
+      .maybeSingle();
 
     if (error) {
       console.error('Error fetching profile:', error);
@@ -110,6 +110,14 @@ export function useAuth(): UseAuthReturn {
             profile,
             isLoading: false,
             isAuthenticated: true,
+          });
+        } else {
+          // Profile not found - user exists in auth but has no profile row
+          setState({
+            user: null,
+            profile: null,
+            isLoading: false,
+            isAuthenticated: false,
           });
         }
       } else if (event === 'SIGNED_OUT') {
