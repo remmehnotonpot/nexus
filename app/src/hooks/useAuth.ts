@@ -41,6 +41,7 @@ export function useAuth(): UseAuthReturn {
   }), []);
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
+    console.log('[useAuth] Fetching profile for:', userId);
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
@@ -48,10 +49,11 @@ export function useAuth(): UseAuthReturn {
       .maybeSingle();
 
     if (error) {
-      console.error('Error fetching profile:', error);
+      console.error('[useAuth] Error fetching profile:', error);
       return null;
     }
 
+    console.log('[useAuth] Profile fetch result:', data ? 'found' : 'not found');
     return data;
   }, []);
 
@@ -136,16 +138,25 @@ export function useAuth(): UseAuthReturn {
   }, [fetchProfile, mapToAuthUser]);
 
   const login = useCallback(async (email: string, password: string): Promise<{ error: Error | null }> => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    console.log('[useAuth] Login attempt:', { email, supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-    if (!error) {
-      router.refresh();
+      if (error) {
+        console.error('[useAuth] Login error:', error);
+      } else {
+        console.log('[useAuth] Login success');
+        router.refresh();
+      }
+
+      return { error };
+    } catch (err) {
+      console.error('[useAuth] Login exception:', err);
+      return { error: err as Error };
     }
-
-    return { error };
   }, [router]);
 
   const logout = useCallback(async (): Promise<void> => {

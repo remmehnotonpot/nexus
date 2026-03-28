@@ -24,9 +24,16 @@ function LoginForm() {
   // Get redirect URL from query params, default to /ops/dashboard
   const redirectTo = searchParams.get('redirectTo') || '/ops/dashboard';
 
+  // Debug logging
+  useEffect(() => {
+    console.log('[LoginPage] Auth state:', { isAuthenticated, isAuthLoading });
+  }, [isAuthenticated, isAuthLoading]);
+
   // Handle redirect when auth state changes
   useEffect(() => {
+    console.log('[LoginPage] Checking redirect:', { isAuthenticated, isAuthLoading, redirectTo });
     if (isAuthenticated && !isAuthLoading) {
+      console.log('[LoginPage] Redirecting to:', redirectTo);
       router.push(redirectTo);
     }
   }, [isAuthenticated, isAuthLoading, redirectTo, router]);
@@ -35,22 +42,26 @@ function LoginForm() {
     e.preventDefault();
     setError('');
     setIsLoading(true);
+    console.log('[LoginPage] Submitting login form:', { email });
 
     const { error: loginError } = await login(email, password);
 
     if (loginError) {
+      console.error('[LoginPage] Login error:', loginError);
       setError(loginError.message || 'Invalid email or password');
       setIsLoading(false);
       return;
     }
 
+    console.log('[LoginPage] Login returned success, waiting for auth state...');
     // Auth state change will trigger the useEffect above to handle redirect
     // If profile is missing, auth will fail and we'll stay on the login page
     setTimeout(() => {
       // Reset loading state after a delay if we're still on the page
       // (this happens if profile fetch fails)
+      console.log('[LoginPage] Timeout - resetting loading state');
       setIsLoading(false);
-    }, 2000);
+    }, 3000);
   };
 
   return (
