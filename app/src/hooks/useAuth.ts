@@ -148,8 +148,9 @@ export function useAuth(): UseAuthReturn {
       if (error) {
         console.error('[useAuth] Login error:', error);
       } else {
-        console.log('[useAuth] Login success');
-        router.refresh();
+        console.log('[useAuth] Login success - waiting for onAuthStateChange');
+        // Don't call router.refresh() here - it can interfere with redirects
+        // The onAuthStateChange handler will update state and trigger redirect
       }
 
       return { error };
@@ -157,7 +158,7 @@ export function useAuth(): UseAuthReturn {
       console.error('[useAuth] Login exception:', err);
       return { error: err as Error };
     }
-  }, [router]);
+  }, []);
 
   const logout = useCallback(async (): Promise<void> => {
     await supabase.auth.signOut();

@@ -1,43 +1,14 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Routes that require authentication
-// Note: Role-based route checks (staff vs customer) are handled client-side via useRequireRole hook
-// Middleware only handles basic auth gate for performance
-const protectedRoutes = [
-  '/dashboard',
-  '/billing',
-  '/shipments',
-  '/customer',
-  '/ops',
-  '/admin',
-  '/analytics',
-];
-
-export async function middleware(request: NextRequest) {
-  const res = NextResponse.next();
-  const path = request.nextUrl.pathname;
-  
-  // Check for Supabase auth cookie
-  const authCookie = request.cookies.get('sb-access-token');
-  const hasSession = !!authCookie;
-  
-  // Check if the path is a protected route
-  const isProtectedRoute = protectedRoutes.some(route => 
-    path === route || path.startsWith(`${route}/`)
-  );
-
-  // Note: Role-based route checks are handled client-side via useRequireRole hook
-  // Middleware only handles basic auth gate for performance
-
-  // If accessing a protected route without a session, redirect to login
-  if (isProtectedRoute && !hasSession) {
-    const redirectUrl = new URL('/auth/login', request.url);
-    redirectUrl.searchParams.set('redirectTo', path);
-    return NextResponse.redirect(redirectUrl);
-  }
-
-  return res;
+export async function middleware(_request: NextRequest) {
+  // Auth currently lives in the browser via `@supabase/supabase-js`, which stores
+  // the session client-side. Middleware cannot reliably read that session, so any
+  // redirect decision here causes false "logged out" loops after a successful sign-in.
+  //
+  // Route protection is handled by the existing client hooks (`useRequireAuth` and
+  // `useRequireRole`) until server-side Supabase auth is added.
+  return NextResponse.next();
 }
 
 // Configure which routes the middleware runs on

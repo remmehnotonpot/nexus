@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
@@ -20,23 +20,26 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const hasRedirected = useRef(false);
 
   // Get redirect URL from query params, default to /ops/dashboard
   const redirectTo = searchParams.get('redirectTo') || '/ops/dashboard';
 
   // Debug logging
   useEffect(() => {
-    console.log('[LoginPage] Auth state:', { isAuthenticated, isAuthLoading });
+    console.log('[LoginPage] Auth state:', { isAuthenticated, isAuthLoading, hasRedirected: hasRedirected.current });
   }, [isAuthenticated, isAuthLoading]);
 
   // Handle redirect when auth state changes
   useEffect(() => {
-    console.log('[LoginPage] Checking redirect:', { isAuthenticated, isAuthLoading, redirectTo });
-    if (isAuthenticated && !isAuthLoading) {
+    console.log('[LoginPage] Checking redirect:', { isAuthenticated, isAuthLoading, hasRedirected: hasRedirected.current, redirectTo });
+    if (isAuthenticated && !isAuthLoading && !hasRedirected.current) {
       console.log('[LoginPage] Redirecting to:', redirectTo);
-      router.push(redirectTo);
+      hasRedirected.current = true;
+      // Use window.location.replace to prevent back button loop
+      window.location.replace(redirectTo);
     }
-  }, [isAuthenticated, isAuthLoading, redirectTo, router]);
+  }, [isAuthenticated, isAuthLoading, redirectTo]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
