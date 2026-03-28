@@ -8,20 +8,36 @@ vi.mock('@/lib/supabase', () => ({
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
-          single: vi.fn().mockResolvedValue({
+          maybeSingle: vi.fn().mockResolvedValue({
             data: {
               id: 'demo-shipment-id',
               tracking_number: 'NXS-DEMO-001',
-              status: 'in-transit',
-              origin: { lat: 31.2304, lng: 121.4737, city: 'Shanghai', country: 'China' },
-              destination: { lat: 34.0522, lng: -118.2437, city: 'Los Angeles', country: 'USA' },
-              current: { lat: 35.0, lng: 140.0, heading: 45 },
+              status: 'in_transit',
+              origin_address: {
+                street: '1 Bund Road',
+                city: 'Shanghai',
+                country: 'China',
+                contact_name: 'Sender Name',
+                contact_phone: '+861234567890',
+                contact_email: 'sender@example.com',
+              },
+              destination_address: {
+                street: '100 Harbor Blvd',
+                city: 'Los Angeles',
+                country: 'USA',
+                contact_name: 'Recipient Name',
+                contact_phone: '+13105551234',
+                contact_email: 'recipient@example.com',
+              },
+              origin_lat: 31.2304,
+              origin_lng: 121.4737,
+              destination_lat: 34.0522,
+              destination_lng: -118.2437,
               current_lat: 35.0,
               current_lng: 140.0,
               current_heading: 45,
               transport_mode: 'ocean',
-              is_live_demo: true,
-              estimated_arrival: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+              delivery_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
               weight_kg: 15000,
               volume_cbm: 45.5,
               goods_description: 'Electronics - Consumer Goods',
@@ -41,6 +57,40 @@ vi.mock('@/lib/supabase', () => ({
                   accuracy: null,
                   battery_level: null,
                   recorded_by: null,
+                },
+              ],
+              shipment_status_history: [
+                {
+                  id: 'history-1',
+                  shipment_id: 'demo-shipment-id',
+                  previous_status: 'pending_dropoff',
+                  new_status: 'in_transit',
+                  sub_status: null,
+                  changed_by: 'admin-1',
+                  changed_by_role: 'operations_manager',
+                  reason: null,
+                  location_lat: null,
+                  location_lng: null,
+                  location_name: 'Shanghai Port',
+                  notes: 'Shipment inducted',
+                  created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+                },
+              ],
+              status_history: [
+                {
+                  id: 'history-1',
+                  shipment_id: 'demo-shipment-id',
+                  previous_status: 'pending_dropoff',
+                  new_status: 'in_transit',
+                  sub_status: null,
+                  changed_by: 'admin-1',
+                  changed_by_role: 'operations_manager',
+                  reason: null,
+                  location_lat: null,
+                  location_lng: null,
+                  location_name: 'Shanghai Port',
+                  notes: 'Shipment inducted',
+                  created_at: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
                 },
               ],
             },
@@ -132,7 +182,7 @@ describe('Tracking View', () => {
     render(<Tracking initialTrackingId="NXS-DEMO-001" />);
     
     await waitFor(() => {
-      expect(document.body.textContent).toMatch(/in-transit|in transit/i);
+      expect(document.body.textContent).toMatch(/in transit/i);
     });
   });
 
@@ -145,11 +195,11 @@ describe('Tracking View', () => {
     });
   });
 
-  it('shows tracking history', async () => {
+  it('shows status history', async () => {
     render(<Tracking initialTrackingId="NXS-DEMO-001" />);
     
     await waitFor(() => {
-      expect(screen.getByText('Tracking History')).toBeInTheDocument();
+      expect(screen.getByText('Status History')).toBeInTheDocument();
     });
   });
 
@@ -161,21 +211,20 @@ describe('Tracking View', () => {
     });
   });
 
-  it('allows showing shipment details', async () => {
+  it('allows showing movement history', async () => {
     render(<Tracking initialTrackingId="NXS-DEMO-001" />);
     
     await waitFor(() => {
       expect(screen.getByText('NXS-DEMO-001')).toBeInTheDocument();
     });
     
-    const detailsButton = screen.getByRole('button', { name: /shipment details/i });
+    const detailsButton = screen.getByRole('button', { name: /movement history/i });
     expect(detailsButton).toBeInTheDocument();
     
     fireEvent.click(detailsButton);
     
     await waitFor(() => {
-      expect(screen.getByText('Weight')).toBeInTheDocument();
-      expect(screen.getByText('Volume')).toBeInTheDocument();
+      expect(screen.getByText('Location Updated')).toBeInTheDocument();
     });
   });
 

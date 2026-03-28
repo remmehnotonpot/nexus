@@ -31,7 +31,7 @@ describe('Shipments API', () => {
   describe('getShipmentByTrackingNumber', () => {
     it('fetches shipment by tracking number', async () => {
       const mockShipment = createMockShipment({ tracking_number: 'NXS-TEST-001' });
-      const mockData = { ...mockShipment, tracking_updates: [] };
+      const mockData = { ...mockShipment, tracking_updates: [], shipment_status_history: [] };
       
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
@@ -43,7 +43,10 @@ describe('Shipments API', () => {
 
       const result = await getShipmentByTrackingNumber('NXS-TEST-001');
 
-      expect(result).toEqual(mockData);
+      expect(result).toEqual({
+        ...mockData,
+        status_history: [],
+      });
     });
 
     it('returns null for non-existent tracking number', async () => {
@@ -96,8 +99,8 @@ describe('Shipments API', () => {
       
       vi.mocked(supabase.from).mockReturnValue({
         select: vi.fn().mockReturnValue({
-          eq: vi.fn().mockReturnValue({
-            order: vi.fn().mockResolvedValue({ data: mockShipments, error: null }),
+          order: vi.fn().mockReturnValue({
+            limit: vi.fn().mockResolvedValue({ data: mockShipments, error: null }),
           }),
         }),
       } as unknown as ReturnType<typeof supabase.from>);

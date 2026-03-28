@@ -32,9 +32,14 @@ const STATUS_MESSAGES: Record<ShipmentStatus, {
   message: (trackingNumber: string, location?: string) => string;
   type: NotificationType;
 }> = {
-  pending: {
+  pending_dropoff: {
     title: 'Shipment Created',
-    message: (tn) => `Shipment ${tn} has been created and is awaiting pickup.`,
+    message: (tn: string) => `Shipment ${tn} has been created and is awaiting drop-off.`,
+    type: 'status-update',
+  },
+  scheduled_for_pickup: {
+    title: 'Pickup Scheduled',
+    message: (tn: string) => `Shipment ${tn} pickup has been scheduled.`,
     type: 'status-update',
   },
   in_transit: {
@@ -59,12 +64,17 @@ const STATUS_MESSAGES: Record<ShipmentStatus, {
   },
   exception: {
     title: 'Shipment Exception',
-    message: (tn: string) => `Shipment ${tn} has an exception. Please check tracking details for more information.`,
+    message: (tn: string) => `There is an issue with shipment ${tn}. Please check for updates.`,
     type: 'delay-alert',
   },
   cancelled: {
     title: 'Shipment Cancelled',
     message: (tn: string) => `Shipment ${tn} has been cancelled.`,
+    type: 'status-update',
+  },
+  returned: {
+    title: 'Shipment Returned',
+    message: (tn: string) => `Shipment ${tn} is being returned to sender.`,
     type: 'status-update',
   },
 };

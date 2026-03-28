@@ -13,6 +13,21 @@ import type {
 } from '@/types';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 
+interface InductShipmentData {
+  actualWeightKg: number;
+  actualDimensions: {
+    length: number;
+    width: number;
+    height: number;
+  };
+  auditedBy: string;
+  auditedAt?: string;
+  notes?: string;
+  photos?: string[];
+  newStatus: ShipmentStatus;
+  userRole: string;
+}
+
 // ============================================
 // Dashboard Operations
 // ============================================
@@ -252,14 +267,89 @@ export async function updateShipmentStatus(
       .single();
 
     if (shipmentData?.customer_id) {
-      await supabase.from('notifications').insert({
+      try {
+        const { error: notificationError } = await supabase.from('notifications').insert({
+          customer_id: shipmentData.customer_id,
+          shipment_id: shipmentId,
+          type: 'status_update',
+          title: 'Shipment Status Updated',
+          message: `Your shipment status has been updated to: ${status}`,
+        });
+
+        if (notificationError) {
+          console.warn('Notification insert skipped:', notificationError.message);
+        }
+      } catch (notificationError) {
+        console.warn('Notification insert skipped:', notificationError);
+      }
+    }
+  }
+}
+
+export async function inductShipment(
+  shipmentId: string,
+  auditData: InductShipmentData
+): Promise<void> {
+  const volumeCbm = (
+    auditData.actualDimensions.length *
+    auditData.actualDimensions.width *
+    auditData.actualDimensions.height
+  ) / 1000000;
+
+  const auditMetadata = {
+    audit_type: 'package_induction',
+    actual_weight_kg: auditData.actualWeightKg,
+    actual_dimensions_cm: auditData.actualDimensions,
+    audited_by: auditData.auditedBy,
+    audited_at: auditData.auditedAt || new Date().toISOString(),
+    photos: auditData.photos || [],
+    user_notes: auditData.notes || '',
+  };
+
+  const auditNotes = [
+    'Package inducted.',
+    auditData.notes?.trim(),
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const { error: rpcError } = await supabase.rpc('induct_shipment', {
+    p_shipment_id: shipmentId,
+    p_actual_weight_kg: auditData.actualWeightKg,
+    p_volume_cbm: volumeCbm,
+    p_new_status: auditData.newStatus,
+    p_admin_id: auditData.auditedBy,
+    p_admin_role: auditData.userRole,
+    p_notes: auditNotes || null,
+    p_metadata: auditMetadata,
+  });
+
+  if (rpcError) {
+    throw new Error(`Failed to induct shipment: ${rpcError.message}`);
+  }
+
+  try {
+    const { data: shipmentData, error: shipmentDataError } = await supabase
+      .from('shipments')
+      .select('customer_id')
+      .eq('id', shipmentId)
+      .single();
+
+    if (!shipmentDataError && shipmentData?.customer_id) {
+      const { error: notificationError } = await supabase.from('notifications').insert({
         customer_id: shipmentData.customer_id,
         shipment_id: shipmentId,
         type: 'status_update',
-        title: 'Shipment Status Updated',
-        message: `Your shipment status has been updated to: ${status}`,
+        title: 'Shipment Inducted',
+        message: `Your shipment has been inducted and is now ${auditData.newStatus}.`,
       });
+
+      if (notificationError) {
+        console.warn('Notification insert skipped:', notificationError.message);
+      }
     }
+  } catch (notificationError) {
+    console.warn('Notification insert skipped:', notificationError);
   }
 }
 

@@ -13,14 +13,26 @@ describe('Shipment Schemas', () => {
     it('validates valid shipment data', () => {
       const validData = {
         tracking_number: 'NXS-TEST-001',
-        origin_city: 'Shanghai',
+        status: 'in_transit',
+        customer_id: '550e8400-e29b-41d4-a716-446655440000',
+        origin_address: {
+          street: '123 Port Ave',
+          city: 'Shanghai',
+          country: 'China',
+        },
         origin_lat: 31.2304,
         origin_lng: 121.4737,
-        destination_city: 'Los Angeles',
+        destination_address: {
+          street: '456 Harbor Blvd',
+          city: 'Los Angeles',
+          country: 'USA',
+        },
         destination_lat: 34.0522,
         destination_lng: -118.2437,
         transport_mode: 'ocean',
-        estimated_arrival: new Date().toISOString(),
+        weight_kg: 100,
+        pickup_date: new Date().toISOString(),
+        delivery_date: new Date().toISOString(),
       };
 
       const result = createShipmentSchema.safeParse(validData);
@@ -100,7 +112,17 @@ describe('Shipment Schemas', () => {
 
   describe('shipmentStatusSchema', () => {
     it('accepts valid status values', () => {
-      const validStatuses = ['pending', 'in-transit', 'customs', 'delivered', 'delayed', 'out-for-delivery'];
+      const validStatuses = [
+        'pending_dropoff', 
+        'scheduled_for_pickup', 
+        'in_transit', 
+        'customs', 
+        'delivered', 
+        'exception', 
+        'out_for_delivery',
+        'cancelled',
+        'returned'
+      ];
       
       validStatuses.forEach(status => {
         const result = shipmentStatusSchema.safeParse(status);
@@ -112,7 +134,7 @@ describe('Shipment Schemas', () => {
   describe('updateShipmentSchema', () => {
     it('validates partial updates', () => {
       const updateData = {
-        status: 'in-transit',
+        status: 'in_transit',
         current_lat: 35.0,
         current_lng: 140.0,
       };

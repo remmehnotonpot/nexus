@@ -35,13 +35,15 @@ interface MobileStatusUpdateProps {
 }
 
 const subStatusOptions: Record<ShipmentStatus, string[]> = {
-  pending: ['awaiting_pickup', 'pickup_scheduled'],
+  pending_dropoff: ['awaiting_dropoff', 'dropped_off'],
+  scheduled_for_pickup: ['pickup_scheduled', 'driver_assigned', 'en_route'],
   in_transit: ['at_origin_facility', 'departed', 'at_sea', 'in_air', 'on_road', 'delayed'],
   customs: ['awaiting_clearance', 'inspection_required', 'held'],
   out_for_delivery: ['with_driver', 'approaching_destination'],
   delivered: ['completed', 'signed'],
   exception: ['delayed', 'damaged', 'address_issue', 'refused'],
   cancelled: ['by_customer', 'by_carrier'],
+  returned: ['return_to_sender', 'return_initiated'],
 };
 
 export function MobileStatusUpdate({

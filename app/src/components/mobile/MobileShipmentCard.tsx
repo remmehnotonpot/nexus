@@ -36,13 +36,15 @@ interface MobileShipmentCardProps {
 }
 
 const statusConfig: Record<ShipmentStatus, { label: string; color: string; icon: React.ReactNode }> = {
-  pending: { label: 'Pending', color: 'bg-yellow-500', icon: <Package className="h-4 w-4" /> },
-  in_transit: { label: 'In Transit', color: 'bg-blue-500', icon: <Truck className="h-4 w-4" /> },
+  pending_dropoff: { label: 'Pending Drop-off', color: 'bg-amber-500', icon: <Package className="h-4 w-4" /> },
+  scheduled_for_pickup: { label: 'Scheduled for Pickup', color: 'bg-blue-500', icon: <Package className="h-4 w-4" /> },
+  in_transit: { label: 'In Transit', color: 'bg-sky-500', icon: <Truck className="h-4 w-4" /> },
   customs: { label: 'In Customs', color: 'bg-purple-500', icon: <AlertCircle className="h-4 w-4" /> },
   out_for_delivery: { label: 'Out for Delivery', color: 'bg-orange-500', icon: <Truck className="h-4 w-4" /> },
   delivered: { label: 'Delivered', color: 'bg-green-500', icon: <Package className="h-4 w-4" /> },
   exception: { label: 'Exception', color: 'bg-red-500', icon: <AlertCircle className="h-4 w-4" /> },
   cancelled: { label: 'Cancelled', color: 'bg-gray-500', icon: <AlertCircle className="h-4 w-4" /> },
+  returned: { label: 'Returned', color: 'bg-gray-500', icon: <AlertCircle className="h-4 w-4" /> },
 };
 
 const transportIcons: Record<TransportMode, React.ReactNode> = {
@@ -71,7 +73,7 @@ export function MobileShipmentCard({
   onContactCustomer,
 }: MobileShipmentCardProps) {
   const [isActionsOpen, setIsActionsOpen] = useState(false);
-  const status = statusConfig[shipment.status as ShipmentStatus] || statusConfig.pending;
+  const status = statusConfig[shipment.status as ShipmentStatus] || statusConfig.pending_dropoff;
   const { origin, destination } = getOriginDestination(shipment);
   const eta = shipment.delivery_date 
     ? format(new Date(shipment.delivery_date), 'MMM d')

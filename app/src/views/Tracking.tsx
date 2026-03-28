@@ -19,18 +19,303 @@ import {
   ChevronUp,
   AlertCircle,
   Wifi,
-  WifiOff
+  WifiOff,
+  User,
+  Mail,
+  Phone,
+  Home,
+  Flag,
+  CheckCircle,
+  Circle,
+  HelpCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrackingMap } from '@/components/TrackingMap';
 import { StatusBadge, LiveBadge } from '@/components/TransportMarker';
 import { useLiveTracking } from '@/hooks/useLiveTracking';
-import type { TrackingUpdate, TransportMode } from '@/types';
+import type { TrackingUpdate, TransportMode, ShipmentStatus, ShipmentStatusHistory } from '@/types';
 
-// Timeline component
+// ============================================
+// Status History Stepper Component
+// ============================================
+
+const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
+  pending_dropoff: { 
+    label: 'Pending Drop-off', 
+    icon: <Package className="w-4 h-4" />, 
+    color: 'text-amber-500 bg-amber-100 dark:bg-amber-900/30' 
+  },
+  scheduled_for_pickup: { 
+    label: 'Scheduled for Pickup', 
+    icon: <Clock className="w-4 h-4" />, 
+    color: 'text-blue-500 bg-blue-100 dark:bg-blue-900/30' 
+  },
+  in_transit: { 
+    label: 'In Transit', 
+    icon: <Truck className="w-4 h-4" />, 
+    color: 'text-sky-500 bg-sky-100 dark:bg-sky-900/30' 
+  },
+  customs: { 
+    label: 'In Customs', 
+    icon: <AlertCircle className="w-4 h-4" />, 
+    color: 'text-purple-500 bg-purple-100 dark:bg-purple-900/30' 
+  },
+  out_for_delivery: { 
+    label: 'Out for Delivery', 
+    icon: <MapPin className="w-4 h-4" />, 
+    color: 'text-orange-500 bg-orange-100 dark:bg-orange-900/30' 
+  },
+  delivered: { 
+    label: 'Delivered', 
+    icon: <CheckCircle className="w-4 h-4" />, 
+    color: 'text-green-500 bg-green-100 dark:bg-green-900/30' 
+  },
+  exception: { 
+    label: 'Exception', 
+    icon: <AlertCircle className="w-4 h-4" />, 
+    color: 'text-red-500 bg-red-100 dark:bg-red-900/30' 
+  },
+  cancelled: { 
+    label: 'Cancelled', 
+    icon: <Circle className="w-4 h-4" />, 
+    color: 'text-gray-500 bg-gray-100 dark:bg-gray-900/30' 
+  },
+  returned: { 
+    label: 'Returned', 
+    icon: <Circle className="w-4 h-4" />, 
+    color: 'text-gray-500 bg-gray-100 dark:bg-gray-900/30' 
+  },
+};
+
+/**
+ * StatusHistoryStepper - Vertical stepper built from shipment_status_history
+ */
+const StatusHistoryStepper = ({ 
+  statusHistory,
+  currentStatus,
+}: { 
+  statusHistory: ShipmentStatusHistory[];
+  currentStatus: string;
+}) => {
+  // Sort by created_at descending (newest first)
+  const sortedHistory = [...statusHistory].sort(
+    (a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
+  );
+
+  if (sortedHistory.length === 0) {
+    return (
+      <div className="text-center py-8 text-slate-500">
+        <Package className="w-12 h-12 mx-auto mb-3 opacity-50" />
+        <p>No status updates available</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-0">
+      {sortedHistory.map((item, index) => {
+        const config = STATUS_CONFIG[item.new_status] || STATUS_CONFIG.in_transit;
+        const isLatest = index === 0;
+        const isLast = index === sortedHistory.length - 1;
+        const changedAt = item.created_at 
+          ? new Date(item.created_at).toLocaleString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : 'Unknown';
+
+        return (
+          <div key={item.id} className="relative pl-8 pb-8 last:pb-0">
+            {/* Timeline line */}
+            {!isLast && (
+              <div className="absolute left-3 top-8 bottom-0 w-0.5 bg-slate-200 dark:bg-slate-700" />
+            )}
+            
+            {/* Timeline dot */}
+            <div className={`absolute left-0 top-1 w-6 h-6 rounded-full flex items-center justify-center ${
+              isLatest 
+                ? `${config.color} ring-2 ring-offset-2 ring-slate-200 dark:ring-slate-800` 
+                : 'bg-slate-200 dark:bg-slate-700 text-slate-500'
+            }`}>
+              {isLatest ? config.icon : <CheckCircle className="w-3 h-3" />}
+            </div>
+
+            {/* Event content */}
+            <div className={isLatest ? 'opacity-100' : 'opacity-70'}>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-slate-900 dark:text-white">
+                  {config.label}
+                </span>
+                {isLatest && (
+                  <Badge variant="secondary" className="text-xs">
+                    Current
+                  </Badge>
+                )}
+              </div>
+              
+              {item.notes && (
+                <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  {item.notes}
+                </p>
+              )}
+              
+              {item.location_name && (
+                <p className="text-sm text-slate-500 mt-1 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />
+                  {item.location_name}
+                </p>
+              )}
+              
+              <p className="text-xs text-slate-400 mt-2">
+                {changedAt}
+                {item.changed_by_role && (
+                  <span className="ml-2">• by {item.changed_by_role.replace('_', ' ')}</span>
+                )}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+// ============================================
+// Sender & Recipient Cards
+// ============================================
+
+/**
+ * AddressCard - Displays sender or recipient information
+ */
+const AddressCard = ({ 
+  type, 
+  address, 
+  contactName,
+  contactPhone,
+  contactEmail,
+}: { 
+  type: 'sender' | 'recipient';
+  address: Record<string, string> | null;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+}) => {
+  const isSender = type === 'sender';
+  const Icon = isSender ? Home : Flag;
+  const title = isSender ? 'Sender' : 'Recipient';
+  const accentColor = isSender ? 'border-l-green-500' : 'border-l-orange-500';
+
+  const city = address?.city || 'Unknown';
+  const country = address?.country || '';
+  const street = address?.street || '';
+  const state = address?.state || '';
+  const postalCode = address?.postal_code || '';
+
+  return (
+    <Card className={`border-l-4 ${accentColor}`}>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+            isSender ? 'bg-green-100 text-green-600 dark:bg-green-900/30' : 'bg-orange-100 text-orange-600 dark:bg-orange-900/30'
+          }`}>
+            <Icon className="w-4 h-4" />
+          </div>
+          {title}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-3">
+        {/* Name */}
+        {contactName && (
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-slate-400" />
+            <span className="font-medium text-slate-900 dark:text-white">{contactName}</span>
+          </div>
+        )}
+        
+        {/* Address */}
+        <div className="space-y-1">
+          <div className="flex items-start gap-2">
+            <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
+            <div className="text-sm text-slate-700 dark:text-slate-300">
+              {street && <p>{street}</p>}
+              <p>
+                {city}{state && `, ${state}`}{postalCode && ` ${postalCode}`}
+              </p>
+              <p className="font-medium">{country}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Contact Info */}
+        {(contactPhone || contactEmail) && (
+          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 space-y-2">
+            {contactPhone && (
+              <a 
+                href={`tel:${contactPhone}`} 
+                className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
+              >
+                <Phone className="w-4 h-4" />
+                {contactPhone}
+              </a>
+            )}
+            {contactEmail && (
+              <a 
+                href={`mailto:${contactEmail}`} 
+                className="flex items-center gap-2 text-sm text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors"
+              >
+                <Mail className="w-4 h-4" />
+                {contactEmail}
+              </a>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// ============================================
+// Support Banner
+// ============================================
+
+/**
+ * SupportBanner - Prominent support contact block
+ */
+const SupportBanner = () => (
+  <Card className="bg-gradient-to-r from-slate-900 to-slate-800 text-white border-0">
+    <CardContent className="p-6">
+      <div className="flex items-start gap-4">
+        <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center flex-shrink-0">
+          <HelpCircle className="w-6 h-6 text-sky-400" />
+        </div>
+        <div className="flex-1">
+          <h3 className="font-semibold text-lg mb-1">Need help with your shipment?</h3>
+          <p className="text-slate-300 text-sm mb-3">
+            Our support team is available to assist you with any questions or concerns.
+          </p>
+          <a 
+            href="mailto:ceo@nimdeshop.com"
+            className="inline-flex items-center gap-2 text-sky-400 hover:text-sky-300 font-medium transition-colors"
+          >
+            <Mail className="w-4 h-4" />
+            Contact us at ceo@nimdeshop.com
+          </a>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+);
+
+// ============================================
+// Legacy Tracking Timeline (for movement history)
+// ============================================
+
 const TrackingTimeline = ({ history }: { history: TrackingUpdate[] }) => {
   const getEventIcon = (source: string) => {
     switch (source) {
@@ -60,7 +345,6 @@ const TrackingTimeline = ({ history }: { history: TrackingUpdate[] }) => {
     return labels[source] || source;
   };
 
-  // Helper to get location name from metadata
   const getLocationName = (event: TrackingUpdate): string => {
     if (event.metadata && typeof event.metadata === 'object' && 'location_name' in event.metadata) {
       return (event.metadata as { location_name?: string }).location_name || '';
@@ -72,12 +356,10 @@ const TrackingTimeline = ({ history }: { history: TrackingUpdate[] }) => {
     <div className="space-y-0">
       {history.map((event, index) => (
         <div key={event.id} className="relative pl-8 pb-8 last:pb-0">
-          {/* Timeline line */}
           {index < history.length - 1 && (
             <div className="absolute left-3 top-6 bottom-0 w-0.5 bg-slate-200 dark:bg-slate-700" />
           )}
           
-          {/* Timeline dot */}
           <div className={`absolute left-0 top-1 w-6 h-6 rounded-full flex items-center justify-center ${
             index === 0 
               ? 'bg-orange-500 text-white' 
@@ -86,7 +368,6 @@ const TrackingTimeline = ({ history }: { history: TrackingUpdate[] }) => {
             {getEventIcon(event.source || '')}
           </div>
 
-          {/* Event content */}
           <div>
             <div className="flex items-center gap-2">
               <span className="font-medium text-slate-900 dark:text-white">
@@ -182,6 +463,32 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
 
   const isLive = connectionStatus === 'connected';
 
+  const toAddressRecord = (value: unknown): Record<string, string> | null => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return null;
+    }
+
+    return value as Record<string, string>;
+  };
+
+  const readAddressField = (
+    address: Record<string, string> | null,
+    field: string
+  ): string | undefined => {
+    const value = address?.[field];
+    return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+  };
+
+  // Extract origin and destination addresses
+  const originAddress = toAddressRecord(shipment?.origin_address);
+  const destAddress = toAddressRecord(shipment?.destination_address);
+  const senderName = readAddressField(originAddress, 'contact_name');
+  const senderPhone = readAddressField(originAddress, 'contact_phone');
+  const senderEmail = readAddressField(originAddress, 'contact_email');
+  const recipientName = readAddressField(destAddress, 'contact_name');
+  const recipientPhone = readAddressField(destAddress, 'contact_phone');
+  const recipientEmail = readAddressField(destAddress, 'contact_email');
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pt-20">
       {/* Header with search */}
@@ -236,7 +543,7 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
           </div>
 
           {/* Sidebar */}
-          <div className="w-full lg:w-96 bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 overflow-y-auto">
+          <div className="w-full lg:w-[480px] bg-white dark:bg-slate-800 border-l border-slate-200 dark:border-slate-700 overflow-y-auto">
             <div className="p-6 space-y-6">
               {/* Shipment header */}
               <div>
@@ -278,6 +585,29 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
 
               <Separator />
 
+              {/* Sender & Recipient Cards */}
+              <div className="space-y-4">
+                <h3 className="font-semibold text-slate-900 dark:text-white">
+                  Shipment Details
+                </h3>
+                <AddressCard
+                  type="sender"
+                  address={originAddress}
+                  contactName={senderName}
+                  contactPhone={senderPhone}
+                  contactEmail={senderEmail}
+                />
+                <AddressCard
+                  type="recipient"
+                  address={destAddress}
+                  contactName={recipientName}
+                  contactPhone={recipientPhone}
+                  contactEmail={recipientEmail}
+                />
+              </div>
+
+              <Separator />
+
               {/* Route info */}
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
@@ -287,10 +617,7 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                   <div>
                     <div className="text-sm text-slate-500">Origin</div>
                     <div className="font-medium text-slate-900 dark:text-white">
-                      {(() => {
-                        const originAddr = (shipment.origin_address || {}) as Record<string, string>;
-                        return `${originAddr.city || 'Unknown'}, ${originAddr.country || 'Unknown'}`;
-                      })()}
+                      {originAddress?.city || 'Unknown'}, {originAddress?.country || 'Unknown'}
                     </div>
                   </div>
                 </div>
@@ -308,10 +635,7 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                   <div>
                     <div className="text-sm text-slate-500">Destination</div>
                     <div className="font-medium text-slate-900 dark:text-white">
-                      {(() => {
-                        const destAddr = (shipment.destination_address || {}) as Record<string, string>;
-                        return `${destAddr.city || 'Unknown'}, ${destAddr.country || 'Unknown'}`;
-                      })()}
+                      {destAddress?.city || 'Unknown'}, {destAddress?.country || 'Unknown'}
                     </div>
                   </div>
                 </div>
@@ -351,48 +675,39 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                 </div>
               )}
 
-              {/* Shipment details toggle */}
+              <Separator />
+
+              {/* Status History Stepper */}
+              <div>
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-4">
+                  Status History
+                </h3>
+                <StatusHistoryStepper 
+                  statusHistory={(shipment as unknown as { status_history?: ShipmentStatusHistory[] }).status_history || []}
+                  currentStatus={shipment.status}
+                />
+              </div>
+
+              {/* Movement History Toggle */}
               <Button
                 variant="outline"
                 className="w-full justify-between"
                 onClick={() => setShowDetails(!showDetails)}
               >
-                Shipment Details
+                Movement History
                 {showDetails ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </Button>
 
               {showDetails && (
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Weight</span>
-                    <span className="text-slate-900 dark:text-white">{shipment.weight_kg?.toLocaleString()} kg</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Volume</span>
-                    <span className="text-slate-900 dark:text-white">{shipment.volume_cbm} CBM</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Goods</span>
-                    <span className="text-slate-900 dark:text-white">{shipment.cargo_description || 'N/A'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Shipped</span>
-                    <span className="text-slate-900 dark:text-white">
-                      {shipment.created_at ? new Date(shipment.created_at).toLocaleDateString() : 'N/A'}
-                    </span>
-                  </div>
+                <div className="space-y-4">
+                  <TrackingTimeline history={trackingHistory} />
                 </div>
               )}
 
               <Separator />
 
-              {/* Tracking timeline */}
-              <div>
-                <h3 className="font-semibold text-slate-900 dark:text-white mb-4">
-                  Tracking History
-                </h3>
-                <TrackingTimeline history={trackingHistory} />
-              </div>
+              {/* Support Banner */}
+              <SupportBanner />
             </div>
           </div>
         </div>

@@ -70,7 +70,7 @@ export interface LegacyShipment {
   updated_at?: string;
 }
 
-type LegacyShipmentStatus = 'pending' | 'in-transit' | 'customs' | 'delivered' | 'delayed' | 'out-for-delivery';
+type LegacyShipmentStatus = 'pending' | 'in-transit' | 'customs' | 'delivered' | 'delayed' | 'out-for-delivery' | 'cancelled' | 'returned';
 
 // ============================================
 // User Roles (Phase 5A)
@@ -115,17 +115,108 @@ export type Quote = Tables<'quotes'>;
 // ============================================
 // Enums & Constants
 // ============================================
+// ============================================
+// Canonical Shipment Status Workflow (Phase 5)
+// ============================================
+
+/**
+ * INTAKE STATES - Customer-created shipments start here
+ * Customers can only create shipments with these statuses
+ */
+export const INTAKE_STATUSES = [
+  'pending_dropoff',       // Customer will drop off at facility
+  'scheduled_for_pickup',  // Staff will pick up from customer
+] as const;
+
+export type IntakeStatus = typeof INTAKE_STATUSES[number];
+
+/**
+ * ACTIVE STATES - Admin/ops transition shipments here after audit
+ */
+export const ACTIVE_STATUSES = [
+  'in_transit',        // Moving through network
+  'customs',           // Held at customs
+  'out_for_delivery',  // Final mile
+  'exception',         // Issue requiring attention
+] as const;
+
+export type ActiveStatus = typeof ACTIVE_STATUSES[number];
+
+/**
+ * TERMINAL STATES - Shipment lifecycle ends here
+ */
+export const TERMINAL_STATUSES = [
+  'delivered',   // Successfully delivered
+  'cancelled',   // Shipment cancelled
+  'returned',    // Returned to sender
+] as const;
+
+export type TerminalStatus = typeof TERMINAL_STATUSES[number];
+
+/**
+ * ALL STATUSES - Complete canonical set
+ */
 export const SHIPMENT_STATUS = [
-  'pending',
-  'in_transit',
-  'customs',
-  'out_for_delivery',
-  'delivered',
-  'exception',
-  'cancelled',
+  ...INTAKE_STATUSES,
+  ...ACTIVE_STATUSES,
+  ...TERMINAL_STATUSES,
 ] as const;
 
 export type ShipmentStatus = typeof SHIPMENT_STATUS[number];
+
+/**
+ * Status transition graph - defines allowed workflow
+ * Keys are source states, values are allowed destination states
+ */
+export const STATUS_TRANSITIONS: Record<ShipmentStatus, readonly ShipmentStatus[]> = {
+  // Intake states - admin must audit before moving to active
+  pending_dropoff: ['in_transit', 'cancelled'],
+  scheduled_for_pickup: ['in_transit', 'cancelled'],
+  
+  // Active states
+  in_transit: ['customs', 'out_for_delivery', 'exception', 'delivered', 'cancelled'],
+  customs: ['in_transit', 'exception', 'delivered', 'cancelled'],
+  out_for_delivery: ['delivered', 'exception', 'returned'],
+  exception: ['in_transit', 'out_for_delivery', 'delivered', 'cancelled', 'returned'],
+  
+  // Terminal states - no transitions allowed
+  delivered: [],
+  cancelled: [],
+  returned: [],
+} as const;
+
+/**
+ * Validate if a status transition is allowed
+ */
+export function isValidStatusTransition(
+  from: ShipmentStatus,
+  to: ShipmentStatus
+): boolean {
+  return STATUS_TRANSITIONS[from]?.includes(to) ?? false;
+}
+
+/**
+ * Check if status is an intake state (customer-created)
+ */
+export function isIntakeStatus(status: ShipmentStatus): status is IntakeStatus {
+  return INTAKE_STATUSES.includes(status as IntakeStatus);
+}
+
+/**
+ * Check if status is a terminal state
+ */
+export function isTerminalStatus(status: ShipmentStatus): status is TerminalStatus {
+  return TERMINAL_STATUSES.includes(status as TerminalStatus);
+}
+
+/**
+ * Roles authorized to update shipment status
+ */
+export const STATUS_UPDATE_ROLES: readonly UserRole[] = [
+  'super_admin',
+  'operations_manager',
+  'logistics_coordinator',
+] as const;
 
 export interface StatusChangeEvent {
   shipmentId: string;
@@ -138,22 +229,26 @@ export interface StatusChangeEvent {
 
 // Legacy status mapping
 export const STATUS_MAP: Record<LegacyShipmentStatus, ShipmentStatus> = {
-  'pending': 'pending',
+  'pending': 'pending_dropoff',
   'in-transit': 'in_transit',
   'customs': 'customs',
   'delivered': 'delivered',
   'delayed': 'exception',
   'out-for-delivery': 'out_for_delivery',
+  'cancelled': 'cancelled',
+  'returned': 'returned',
 };
 
 export const REVERSE_STATUS_MAP: Record<ShipmentStatus, LegacyShipmentStatus> = {
-  'pending': 'pending',
+  'pending_dropoff': 'pending',
+  'scheduled_for_pickup': 'pending',
   'in_transit': 'in-transit',
   'customs': 'customs',
   'delivered': 'delivered',
   'exception': 'delayed',
   'out_for_delivery': 'out-for-delivery',
   'cancelled': 'delivered',
+  'returned': 'delivered',
 };
 
 export const TRANSPORT_MODE = [
@@ -335,6 +430,59 @@ export interface StatusUpdateData {
   notes?: string;
   notifyCustomer?: boolean;
   milestoneId?: string;
+}
+
+// ============================================
+// Intake Audit Types (Phase 5)
+// ============================================
+
+/**
+ * Data required when admin audits/inducts a shipment
+ * This is submitted when moving from intake to active state
+ */
+export interface IntakeAuditData {
+  actualWeightKg: number;           // Audited weight
+  actualDimensions: {               // Audited dimensions (cm)
+    length: number;
+    width: number;
+    height: number;
+  };
+  auditedBy: string;                // Admin user ID
+  auditedAt: string;                // ISO timestamp
+  notes?: string;                   // Audit notes
+  photos?: string[];                // Photo URLs
+}
+
+/**
+ * Customer shipment request - what customers can submit
+ */
+export interface CustomerShipmentRequest {
+  trackingNumber: string;
+  originAddress: Address;
+  destinationAddress: Address;
+  pickupDate?: string;
+  deliveryDate?: string;
+  transportMode: TransportMode;
+  cargoDescription?: string;
+  cargoType?: CargoType;
+  pieces?: number;
+  declaredValue?: number;
+  currency?: string;
+  // Status must be pending_dropoff or scheduled_for_pickup
+  status: IntakeStatus;
+}
+
+/**
+ * Staff shipment creation - admin/ops can submit with full data
+ */
+export interface StaffShipmentCreate extends CustomerShipmentRequest {
+  customerId: string;
+  weightKg: number;
+  volumeCbM?: number;
+  serviceType?: ServiceType;
+  baseRate?: number;
+  fuelSurcharge?: number;
+  additionalCharges?: Record<string, number>;
 }
 
 // ============================================

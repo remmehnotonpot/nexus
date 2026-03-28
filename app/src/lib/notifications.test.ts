@@ -12,7 +12,7 @@ describe('Notification System', () => {
   describe('createStatusNotification', () => {
     it('creates status notification', () => {
       const event: StatusChangeEvent = {
-        previousStatus: 'pending',
+        previousStatus: 'pending_dropoff',
         newStatus: 'in_transit',
         shipmentId: 'ship-123',
         trackingNumber: 'NXS-TEST-001',

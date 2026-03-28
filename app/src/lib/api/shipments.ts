@@ -5,19 +5,24 @@
 
 import { supabase } from '@/lib/supabase';
 import { NotFoundError, DatabaseError } from '@/lib/errors';
-import type { Shipment, TrackingUpdate } from '@/types';
+import type { Shipment, TrackingUpdate, ShipmentStatusHistory } from '@/types';
 
 /**
  * Get a shipment by tracking number with full tracking history
  */
 export async function getShipmentByTrackingNumber(
   trackingNumber: string
-): Promise<(Shipment & { tracking_updates: TrackingUpdate[] }) | null> {
+): Promise<(Shipment & {
+  tracking_updates: TrackingUpdate[];
+  shipment_status_history: ShipmentStatusHistory[];
+  status_history: ShipmentStatusHistory[];
+}) | null> {
   const { data, error } = await supabase
     .from('shipments')
     .select(`
       *,
-      tracking_updates!left (*)
+      tracking_updates!left (*),
+      shipment_status_history!left (*)
     `)
     .eq('tracking_number', trackingNumber)
     .maybeSingle();
@@ -27,7 +32,21 @@ export async function getShipmentByTrackingNumber(
     throw new DatabaseError('Failed to fetch shipment');
   }
 
-  return data as (Shipment & { tracking_updates: TrackingUpdate[] }) | null;
+  if (!data) {
+    return null;
+  }
+
+  return {
+    ...data,
+    tracking_updates: data.tracking_updates || [],
+    shipment_status_history: data.shipment_status_history || [],
+    // Keep a stable field for views that already read status_history.
+    status_history: data.shipment_status_history || [],
+  } as Shipment & {
+    tracking_updates: TrackingUpdate[];
+    shipment_status_history: ShipmentStatusHistory[];
+    status_history: ShipmentStatusHistory[];
+  };
 }
 
 /**
@@ -49,14 +68,16 @@ export async function getShipmentsByCustomer(customerId: string): Promise<Shipme
 }
 
 /**
- * Get all demo shipments
+ * Get example shipments for public/demo surfaces.
+ * The live schema no longer includes `is_live_demo`, so this returns
+ * the most recent shipments instead of filtering on a removed column.
  */
 export async function getDemoShipments(): Promise<Shipment[]> {
   const { data, error } = await supabase
     .from('shipments')
     .select('*')
-    .eq('is_live_demo', true)
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .limit(10);
 
   if (error) {
     console.error('Error fetching demo shipments:', error);

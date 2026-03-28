@@ -41,12 +41,15 @@ import {
 
 const statusFilters: { value: ShipmentStatus | 'all'; label: string }[] = [
   { value: 'all', label: 'All Statuses' },
-  { value: 'pending', label: 'Pending' },
+  { value: 'pending_dropoff', label: 'Pending Drop-off' },
+  { value: 'scheduled_for_pickup', label: 'Scheduled for Pickup' },
   { value: 'in_transit', label: 'In Transit' },
   { value: 'customs', label: 'In Customs' },
   { value: 'out_for_delivery', label: 'Out for Delivery' },
   { value: 'delivered', label: 'Delivered' },
   { value: 'exception', label: 'Exception' },
+  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'returned', label: 'Returned' },
 ];
 
 const transportFilters: { value: TransportMode | 'all'; label: string }[] = [

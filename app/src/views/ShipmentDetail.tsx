@@ -6,8 +6,10 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
-import { getShipmentWithRelations, updateShipmentStatus } from '@/lib/api/operations';
-import type { ShipmentWithRelations, ShipmentStatus } from '@/types';
+import { getShipmentWithRelations, inductShipment, updateShipmentStatus } from '@/lib/api/operations';
+import type { ShipmentWithRelations, ShipmentStatus, IntakeStatus, ActiveStatus } from '@/types';
+import { ACTIVE_STATUSES, isIntakeStatus, isValidStatusTransition, STATUS_UPDATE_ROLES } from '@/types';
+import { staffInductionSchema, type StaffInductionInput } from '@/lib/schemas/shipment';
 import { MobileHeader } from '@/components/mobile/MobileHeader';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { MobileStatusUpdate } from '@/components/mobile/MobileStatusUpdate';
@@ -17,6 +19,26 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useRequireRole } from '@/hooks/useAuth';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 import {
   Package,
   MapPin,
@@ -36,20 +58,26 @@ import {
   Plane,
   Ship,
   Train,
+  ClipboardCheck,
+  Ruler,
+  Camera,
 } from 'lucide-react';
 
 interface ShipmentDetailProps {
   shipmentId: string;
 }
 
-const statusConfig: Record<ShipmentStatus, { label: string; color: string; bgColor: string }> = {
-  pending: { label: 'Pending', color: 'text-yellow-600', bgColor: 'bg-yellow-100 dark:bg-yellow-900/30' },
+// Extended status config with intake states
+const statusConfig: Record<ShipmentStatus | IntakeStatus, { label: string; color: string; bgColor: string }> = {
+  pending_dropoff: { label: 'Pending Drop-off', color: 'text-amber-600', bgColor: 'bg-amber-100 dark:bg-amber-900/30' },
+  scheduled_for_pickup: { label: 'Scheduled for Pickup', color: 'text-blue-600', bgColor: 'bg-blue-100 dark:bg-blue-900/30' },
   in_transit: { label: 'In Transit', color: 'text-blue-600', bgColor: 'bg-blue-100 dark:bg-blue-900/30' },
   customs: { label: 'In Customs', color: 'text-purple-600', bgColor: 'bg-purple-100 dark:bg-purple-900/30' },
   out_for_delivery: { label: 'Out for Delivery', color: 'text-orange-600', bgColor: 'bg-orange-100 dark:bg-orange-900/30' },
   delivered: { label: 'Delivered', color: 'text-green-600', bgColor: 'bg-green-100 dark:bg-green-900/30' },
   exception: { label: 'Exception', color: 'text-red-600', bgColor: 'bg-red-100 dark:bg-red-900/30' },
   cancelled: { label: 'Cancelled', color: 'text-gray-600', bgColor: 'bg-gray-100 dark:bg-gray-900/30' },
+  returned: { label: 'Returned', color: 'text-gray-600', bgColor: 'bg-gray-100 dark:bg-gray-900/30' },
 };
 
 const transportIcons = {
@@ -125,15 +153,232 @@ function TimelineItem({
   );
 }
 
+/**
+ * InductPackageModal - Admin workflow for auditing and inducting packages
+ * Only shown for shipments in intake states (pending_dropoff, scheduled_for_pickup)
+ */
+function InductPackageModal({
+  shipment,
+  isOpen,
+  onClose,
+  onSubmit,
+  isSubmitting,
+}: {
+  shipment: ShipmentWithRelations;
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: StaffInductionInput) => Promise<void>;
+  isSubmitting: boolean;
+}) {
+  const { profile } = useAuth();
+  const allowedTransitionStatuses = ACTIVE_STATUSES.filter((status) =>
+    isValidStatusTransition(shipment.status as ShipmentStatus, status)
+  );
+  
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    watch,
+    setValue,
+    reset,
+  } = useForm<StaffInductionInput>({
+    resolver: zodResolver(staffInductionSchema),
+    defaultValues: {
+      shipment_id: shipment.id,
+      actual_weight_kg: undefined,
+      actual_dimensions: { length: 0, width: 0, height: 0 },
+      audited_by: profile?.id || '',
+      audited_at: new Date().toISOString(),
+      notes: '',
+      new_status: allowedTransitionStatuses[0] || 'in_transit',
+    },
+  });
+
+  const newStatus = watch('new_status');
+
+  const handleFormSubmit = async (data: StaffInductionInput) => {
+    await onSubmit(data);
+    reset();
+  };
+
+  // Calculate volume from dimensions
+  const length = watch('actual_dimensions.length') || 0;
+  const width = watch('actual_dimensions.width') || 0;
+  const height = watch('actual_dimensions.height') || 0;
+  const calculatedVolume = (length * width * height) / 1000000; // Convert cm³ to m³
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ClipboardCheck className="h-5 w-5 text-primary" />
+            Induct Package
+          </DialogTitle>
+          <DialogDescription>
+            Audit and induct shipment <span className="font-mono font-medium">{shipment.tracking_number}</span>. 
+            Record actual measurements and transition to active status.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
+          {/* Hidden fields */}
+          <input type="hidden" {...register('shipment_id')} value={shipment.id} />
+          <input type="hidden" {...register('audited_by')} value={profile?.id} />
+
+          {/* Actual Weight */}
+          <div className="space-y-2">
+            <Label htmlFor="actual_weight_kg" className="flex items-center gap-2">
+              <Weight className="h-4 w-4" />
+              Actual Weight (kg) <span className="text-red-500">*</span>
+            </Label>
+            <Input
+              id="actual_weight_kg"
+              type="number"
+              step="0.01"
+              placeholder="Enter actual weight"
+              {...register('actual_weight_kg', { valueAsNumber: true })}
+            />
+            {errors.actual_weight_kg && (
+              <p className="text-sm text-red-500">{errors.actual_weight_kg.message}</p>
+            )}
+          </div>
+
+          {/* Actual Dimensions */}
+          <div className="space-y-3">
+            <Label className="flex items-center gap-2">
+              <Ruler className="h-4 w-4" />
+              Actual Dimensions (cm) <span className="text-red-500">*</span>
+            </Label>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="length" className="text-xs text-muted-foreground">Length</Label>
+                <Input
+                  id="length"
+                  type="number"
+                  placeholder="L"
+                  {...register('actual_dimensions.length', { valueAsNumber: true })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="width" className="text-xs text-muted-foreground">Width</Label>
+                <Input
+                  id="width"
+                  type="number"
+                  placeholder="W"
+                  {...register('actual_dimensions.width', { valueAsNumber: true })}
+                />
+              </div>
+              <div>
+                <Label htmlFor="height" className="text-xs text-muted-foreground">Height</Label>
+                <Input
+                  id="height"
+                  type="number"
+                  placeholder="H"
+                  {...register('actual_dimensions.height', { valueAsNumber: true })}
+                />
+              </div>
+            </div>
+            {errors.actual_dimensions && (
+              <p className="text-sm text-red-500">{errors.actual_dimensions.message}</p>
+            )}
+            {calculatedVolume > 0 && (
+              <p className="text-sm text-muted-foreground">
+                Calculated volume: <span className="font-medium">{calculatedVolume.toFixed(3)} m³</span>
+              </p>
+            )}
+          </div>
+
+          {/* New Status After Induction */}
+          <div className="space-y-2">
+            <Label htmlFor="new_status">Transition To</Label>
+            <Select
+              value={newStatus}
+              onValueChange={(value) => setValue('new_status', value as ActiveStatus)}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select new status" />
+              </SelectTrigger>
+              <SelectContent>
+                {allowedTransitionStatuses.map((status) => (
+                  <SelectItem key={status} value={status}>
+                    {statusConfig[status].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {errors.new_status && (
+              <p className="text-sm text-red-500">{errors.new_status.message}</p>
+            )}
+          </div>
+
+          {/* Notes */}
+          <div className="space-y-2">
+            <Label htmlFor="notes" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Audit Notes
+            </Label>
+            <Textarea
+              id="notes"
+              placeholder="Any observations during physical audit..."
+              {...register('notes')}
+            />
+          </div>
+
+          {/* Photo Upload Placeholder */}
+          <div className="space-y-2">
+            <Label className="flex items-center gap-2">
+              <Camera className="h-4 w-4" />
+              Audit Photos
+            </Label>
+            <div className="border-2 border-dashed border-muted rounded-lg p-4 text-center">
+              <p className="text-sm text-muted-foreground">
+                Photo upload will be implemented in the next phase
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isSubmitting || allowedTransitionStatuses.length === 0}>
+              {isSubmitting ? (
+                <>
+                  <Clock className="mr-2 h-4 w-4 animate-spin" />
+                  Inducting...
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Complete Induction
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
   const router = useRouter();
   const { user, profile } = useAuth();
   const [shipment, setShipment] = useState<ShipmentWithRelations | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Induction modal state
+  const [isInductModalOpen, setIsInductModalOpen] = useState(false);
+  const [isInducting, setIsInducting] = useState(false);
 
   // Require staff role
   useRequireRole(['super_admin', 'operations_manager', 'logistics_coordinator', 'driver', 'warehouse_staff', 'customer_support', 'viewer']);
+
+  // Check if user can update status
+  const canUpdateStatus = profile && STATUS_UPDATE_ROLES.includes(profile.role as typeof STATUS_UPDATE_ROLES[number]);
 
   useEffect(() => {
     fetchShipment();
@@ -177,6 +422,38 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
     await fetchShipment();
   };
 
+  /**
+   * Handle package induction - admin workflow
+   */
+  const handleInductPackage = async (data: StaffInductionInput) => {
+    if (!profile || !shipment) return;
+
+    setIsInducting(true);
+    try {
+      await inductShipment(
+        shipmentId,
+        {
+          actualWeightKg: data.actual_weight_kg,
+          actualDimensions: data.actual_dimensions,
+          auditedBy: data.audited_by,
+          auditedAt: data.audited_at,
+          notes: data.notes,
+          photos: data.photos,
+          newStatus: data.new_status || 'in_transit',
+          userRole: profile.role,
+        },
+      );
+
+      setIsInductModalOpen(false);
+      await fetchShipment();
+    } catch (err) {
+      console.error('Error inducting package:', err);
+      setError(err instanceof Error ? err.message : 'Failed to induct package');
+    } finally {
+      setIsInducting(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background">
@@ -211,7 +488,7 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
     );
   }
 
-  const status = statusConfig[shipment.status as ShipmentStatus] || statusConfig.pending;
+  const status = statusConfig[shipment.status as ShipmentStatus] || statusConfig.in_transit;
   const TransportIcon = transportIcons[shipment.transport_mode as keyof typeof transportIcons] || Truck;
   const origin = typeof shipment.origin_address === 'object' && shipment.origin_address !== null
     ? (shipment.origin_address as Record<string, string>)
@@ -219,6 +496,10 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
   const destination = typeof shipment.destination_address === 'object' && shipment.destination_address !== null
     ? (shipment.destination_address as Record<string, string>)
     : { city: 'Unknown', country: '' };
+
+  // Check if shipment is in intake state and user can induct
+  const isIntakeState = isIntakeStatus(shipment.status as ShipmentStatus);
+  const canInduct = canUpdateStatus && isIntakeState;
 
   return (
     <div className="min-h-screen bg-background pb-20">
@@ -250,23 +531,47 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
                 )}
               </div>
               <div className="text-right">
-                <p className="text-2xl font-bold">{shipment.weight_kg?.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{shipment.weight_kg?.toLocaleString() || '-'}</p>
                 <p className="text-xs text-muted-foreground">kg</p>
               </div>
             </div>
 
-            {/* Update Status Button */}
-            <MobileStatusUpdate
-              currentStatus={shipment.status as ShipmentStatus}
-              onSubmit={handleStatusUpdate}
-              trigger={
-                <Button className="w-full mt-4">
-                  Update Status
-                </Button>
-              }
-            />
+            {/* Induction Button - Only shown for intake states */}
+            {canInduct && (
+              <Button 
+                className="w-full mt-4" 
+                onClick={() => setIsInductModalOpen(true)}
+              >
+                <ClipboardCheck className="mr-2 h-4 w-4" />
+                Induct Package
+              </Button>
+            )}
+
+            {/* Update Status Button - Only shown for non-intake states or if can't induct */}
+            {canUpdateStatus && !isIntakeState && (
+              <MobileStatusUpdate
+                currentStatus={shipment.status as ShipmentStatus}
+                onSubmit={handleStatusUpdate}
+                trigger={
+                  <Button className="w-full mt-4">
+                    Update Status
+                  </Button>
+                }
+              />
+            )}
           </CardContent>
         </Card>
+
+        {/* Induction Modal */}
+        {canInduct && (
+          <InductPackageModal
+            shipment={shipment}
+            isOpen={isInductModalOpen}
+            onClose={() => setIsInductModalOpen(false)}
+            onSubmit={handleInductPackage}
+            isSubmitting={isInducting}
+          />
+        )}
 
         {/* Route Progress */}
         <Card>
@@ -299,25 +604,27 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
           </CardContent>
         </Card>
 
-        {/* Timeline */}
+        {/* Status History Timeline */}
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">Timeline</CardTitle>
+            <CardTitle className="text-base">Status History</CardTitle>
           </CardHeader>
           <CardContent className="pt-0">
             <div className="space-y-0">
-              {shipment.milestones?.map((milestone, index) => (
-                <TimelineItem
-                  key={milestone.id}
-                  status={milestone.status as 'completed' | 'current' | 'pending'}
-                  title={milestone.location_name}
-                  subtitle={milestone.type.replace('_', ' ')}
-                  date={milestone.actual_date || milestone.scheduled_date || undefined}
-                  isCompleted={milestone.status === 'completed'}
-                  isCurrent={milestone.status === 'in_progress'}
-                  isLast={index === (shipment.milestones?.length || 0) - 1}
-                />
-              )) || (
+              {shipment.status_history && shipment.status_history.length > 0 ? (
+                shipment.status_history.map((historyItem, index) => (
+                  <TimelineItem
+                    key={historyItem.id}
+                    status={index === 0 ? 'current' : 'completed'}
+                    title={statusConfig[historyItem.new_status as ShipmentStatus]?.label || historyItem.new_status}
+                    subtitle={historyItem.notes || `Changed from ${statusConfig[historyItem.previous_status as ShipmentStatus]?.label || historyItem.previous_status}`}
+                    date={historyItem.created_at || undefined}
+                    isCompleted={index > 0}
+                    isCurrent={index === 0}
+                    isLast={index === (shipment.status_history?.length || 0) - 1}
+                  />
+                ))
+              ) : (
                 <TimelineItem
                   status="completed"
                   title="Shipment Created"
@@ -422,7 +729,7 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Weight</p>
-                <p className="font-medium">{shipment.weight_kg?.toLocaleString()} kg</p>
+                <p className="font-medium">{shipment.weight_kg?.toLocaleString() || '-'} kg</p>
               </div>
               {shipment.volume_cbm && (
                 <div>

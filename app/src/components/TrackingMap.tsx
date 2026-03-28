@@ -83,7 +83,7 @@ export const TrackingMap = ({
         },
       });
 
-      // Add route line layer
+      // Add route line layer (main line)
       newMap.addLayer({
         id: 'route-line',
         type: 'line',
@@ -115,6 +115,58 @@ export const TrackingMap = ({
           'line-blur': 4,
         },
       }, 'route-line');
+
+      // Add origin marker source
+      newMap.addSource('origin', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Point',
+            coordinates: [0, 0],
+          },
+        },
+      });
+
+      // Add destination marker source
+      newMap.addSource('destination', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: {
+            type: 'Point',
+            coordinates: [0, 0],
+          },
+        },
+      });
+
+      // Add origin marker layer
+      newMap.addLayer({
+        id: 'origin-marker',
+        type: 'circle',
+        source: 'origin',
+        paint: {
+          'circle-radius': 8,
+          'circle-color': '#22c55e',
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
+
+      // Add destination marker layer
+      newMap.addLayer({
+        id: 'destination-marker',
+        type: 'circle',
+        source: 'destination',
+        paint: {
+          'circle-radius': 8,
+          'circle-color': '#f97316',
+          'circle-stroke-width': 3,
+          'circle-stroke-color': '#ffffff',
+        },
+      });
     });
 
     map.current = newMap;
@@ -325,7 +377,9 @@ export const TrackingMap = ({
     return markerEl;
   };
 
-  // Update route line
+  /**
+   * Update the route line source with new coordinates
+   */
   const updateRouteLine = useCallback((coordinates: [number, number][]) => {
     if (!map.current || !mapLoaded) return;
 
@@ -342,7 +396,90 @@ export const TrackingMap = ({
     }
   }, [mapLoaded]);
 
-  // Get origin/destination from shipment
+  /**
+   * Update origin and destination markers
+   */
+  const updateEndpointMarkers = useCallback((
+    origin: { lng: number; lat: number },
+    destination: { lng: number; lat: number }
+  ) => {
+    if (!map.current || !mapLoaded) return;
+
+    const originSource = map.current.getSource('origin') as maplibregl.GeoJSONSource;
+    const destSource = map.current.getSource('destination') as maplibregl.GeoJSONSource;
+
+    if (originSource) {
+      originSource.setData({
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'Point',
+          coordinates: [origin.lng, origin.lat],
+        },
+      });
+    }
+
+    if (destSource) {
+      destSource.setData({
+        type: 'Feature',
+        properties: {},
+        geometry: {
+          type: 'Point',
+          coordinates: [destination.lng, destination.lat],
+        },
+      });
+    }
+  }, [mapLoaded]);
+
+  /**
+   * Build the complete flight trail:
+   * 1. Origin coordinates
+   * 2. All historical tracking_updates coordinates
+   * 3. Current position (if distinct from last history point)
+   */
+  const buildFlightTrail = useCallback((
+    shipment: Shipment,
+    history: TrackingUpdate[],
+    currentLat: number,
+    currentLng: number
+  ): [number, number][] => {
+    const coordinates: [number, number][] = [];
+
+    // 1. Always start with origin
+    const originLng = shipment.origin_lng ?? 0;
+    const originLat = shipment.origin_lat ?? 0;
+    if (originLng && originLat) {
+      coordinates.push([originLng, originLat]);
+    }
+
+    // 2. Add all historical tracking points
+    // Sort by created_at to ensure chronological order
+    const sortedHistory = [...history].sort(
+      (a, b) => new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime()
+    );
+
+    for (const point of sortedHistory) {
+      if (point.lng && point.lat) {
+        coordinates.push([point.lng, point.lat]);
+      }
+    }
+
+    // 3. Add current position if distinct from last history point
+    if (currentLng && currentLat) {
+      const lastPoint = coordinates[coordinates.length - 1];
+      if (!lastPoint || 
+          Math.abs(lastPoint[0] - currentLng) > 0.0001 || 
+          Math.abs(lastPoint[1] - currentLat) > 0.0001) {
+        coordinates.push([currentLng, currentLat]);
+      }
+    }
+
+    return coordinates;
+  }, []);
+
+  /**
+   * Get origin/destination from shipment
+   */
   const getOriginDestination = (shipment: Shipment) => {
     const originAddr = (shipment.origin_address || {}) as Record<string, string | number>;
     const destAddr = (shipment.destination_address || {}) as Record<string, string | number>;
@@ -374,30 +511,36 @@ export const TrackingMap = ({
 
     const { origin, destination, current } = getOriginDestination(shipment);
 
+    // Update origin and destination markers
+    updateEndpointMarkers(
+      { lng: origin.lng, lat: origin.lat },
+      { lng: destination.lng, lat: destination.lat }
+    );
+
     if (current.lat && current.lng) {
       // Initial marker creation (no animation)
       updateMarker(current.lat, current.lng, current.heading, shipment.transport_mode as TransportMode, false);
     }
 
-    // Build route from tracking history
-    if (trackingHistory.length > 0) {
-      const routeCoords: [number, number][] = trackingHistory.map(log => [log.lng, log.lat]);
-      
-      // Add current position if not in history
-      if (current.lat && current.lng) {
-        const lastPoint = routeCoords[routeCoords.length - 1];
-        if (lastPoint && (lastPoint[0] !== current.lng || lastPoint[1] !== current.lat)) {
-          routeCoords.push([current.lng, current.lat]);
-        }
-      }
+    // Build and display the complete flight trail
+    const trailCoordinates = buildFlightTrail(
+      shipment,
+      trackingHistory,
+      current.lat,
+      current.lng
+    );
 
-      updateRouteLine(routeCoords);
+    if (trailCoordinates.length > 0) {
+      // Update the route line with all coordinates
+      updateRouteLine(trailCoordinates);
 
-      // Fit bounds to show entire route (only on initial load)
+      // Fit bounds to show entire trail
       const bounds = new maplibregl.LngLatBounds();
-      routeCoords.forEach(coord => bounds.extend(coord));
       
-      // Include origin and destination
+      // Include all trail points
+      trailCoordinates.forEach(coord => bounds.extend(coord));
+      
+      // Also ensure origin and destination are included
       bounds.extend([origin.lng, origin.lat]);
       bounds.extend([destination.lng, destination.lat]);
 
@@ -406,7 +549,7 @@ export const TrackingMap = ({
         duration: 1000,
       });
     }
-  }, [shipment, trackingHistory, mapLoaded, updateMarker, updateRouteLine]);
+  }, [shipment, trackingHistory, mapLoaded, updateMarker, updateRouteLine, updateEndpointMarkers, buildFlightTrail]);
 
   // Handle live position updates with smooth interpolation
   useEffect(() => {
@@ -419,8 +562,17 @@ export const TrackingMap = ({
     // Only update if position has actually changed
     if (targetLat !== currentLat || targetLng !== currentLng) {
       updateMarker(targetLat, targetLng, heading, shipment.transport_mode as TransportMode, true);
+      
+      // Update the trail to include the new current position
+      const trailCoordinates = buildFlightTrail(
+        shipment,
+        trackingHistory,
+        targetLat,
+        targetLng
+      );
+      updateRouteLine(trailCoordinates);
     }
-  }, [targetPosition, heading, shipment, mapLoaded, updateMarker]);
+  }, [targetPosition, heading, shipment, trackingHistory, mapLoaded, updateMarker, updateRouteLine, buildFlightTrail]);
 
   // Helper function to get transport icon SVG
   const getTransportIconSvg = (mode: TransportMode, planeSvg: string = ''): string => {
@@ -475,6 +627,27 @@ export const TrackingMap = ({
       {isLive && (
         <div className="absolute top-4 left-4 z-10">
           <LiveBadge />
+        </div>
+      )}
+
+      {/* Legend overlay */}
+      {shipment && (
+        <div className="absolute top-4 right-4 z-10 bg-slate-900/90 backdrop-blur-md rounded-lg p-3 shadow-xl border border-slate-700">
+          <div className="text-xs text-slate-400 mb-2 font-medium">Route Legend</div>
+          <div className="space-y-2">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-green-500 border-2 border-white"></div>
+              <span className="text-xs text-white">Origin</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-orange-500 border-2 border-white"></div>
+              <span className="text-xs text-white">Destination</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-1 bg-sky-500 rounded"></div>
+              <span className="text-xs text-white">Flight Path</span>
+            </div>
+          </div>
         </div>
       )}
 

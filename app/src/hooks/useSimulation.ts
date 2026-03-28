@@ -365,27 +365,31 @@ export function getTransportIcon(mode: TransportMode): string {
 // Helper to get status color (using new schema status values)
 export function getStatusColor(status: ShipmentStatus): string {
   const colors: Record<ShipmentStatus, string> = {
-    pending: 'bg-yellow-500',
-    in_transit: 'bg-blue-500',
+    pending_dropoff: 'bg-amber-500',
+    scheduled_for_pickup: 'bg-blue-500',
+    in_transit: 'bg-sky-500',
     customs: 'bg-orange-500',
     delivered: 'bg-green-500',
     exception: 'bg-red-500',
     out_for_delivery: 'bg-purple-500',
     cancelled: 'bg-gray-500',
+    returned: 'bg-gray-500',
   };
-  return colors[status];
+  return colors[status] || 'bg-gray-500';
 }
 
 // Helper to get status label (using new schema status values)
 export function getStatusLabel(status: ShipmentStatus): string {
   const labels: Record<ShipmentStatus, string> = {
-    pending: 'Pending',
+    pending_dropoff: 'Pending Drop-off',
+    scheduled_for_pickup: 'Scheduled for Pickup',
     in_transit: 'In Transit',
     customs: 'In Customs',
     delivered: 'Delivered',
     exception: 'Exception',
     out_for_delivery: 'Out for Delivery',
     cancelled: 'Cancelled',
+    returned: 'Returned',
   };
-  return labels[status];
+  return labels[status] || status;
 }
