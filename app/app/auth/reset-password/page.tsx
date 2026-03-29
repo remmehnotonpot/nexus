@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +11,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Package, Loader2, Eye, EyeOff, CheckCircle, ArrowLeft } from 'lucide-react';
 
 export default function ResetPasswordPage() {
-  const router = useRouter();
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -63,7 +61,7 @@ export default function ResetPasswordPage() {
       setIsSuccess(true);
       // Sign out after successful password reset
       await supabase.auth.signOut();
-    } catch (err) {
+    } catch {
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);

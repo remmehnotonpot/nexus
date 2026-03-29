@@ -23,6 +23,7 @@ export function useRealtimeShipment(
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const { onUpdate, onLocationChange, onStatusChange } = options;
 
   useEffect(() => {
     if (!shipmentId) return;
@@ -43,14 +44,14 @@ export function useRealtimeShipment(
           const oldShipment = payload.old as Shipment;
 
           setLastUpdate(new Date());
-          options.onUpdate?.(newShipment);
+          onUpdate?.(newShipment);
 
           // Check for location change
           if (
             newShipment.current_lat !== oldShipment.current_lat ||
             newShipment.current_lng !== oldShipment.current_lng
           ) {
-            options.onLocationChange?.(
+            onLocationChange?.(
               newShipment.current_lat ?? 0,
               newShipment.current_lng ?? 0,
               newShipment.current_heading ?? undefined
@@ -59,7 +60,7 @@ export function useRealtimeShipment(
 
           // Check for status change
           if (newShipment.status !== oldShipment.status) {
-            options.onStatusChange?.(newShipment.status, oldShipment.status);
+            onStatusChange?.(newShipment.status, oldShipment.status);
           }
         }
       )
@@ -74,7 +75,7 @@ export function useRealtimeShipment(
       channelRef.current = null;
       setIsConnected(false);
     };
-  }, [shipmentId, options.onUpdate, options.onLocationChange, options.onStatusChange]);
+  }, [shipmentId, onUpdate, onLocationChange, onStatusChange]);
 
   return { isConnected, lastUpdate };
 }
@@ -94,6 +95,7 @@ export function useRealtimeTracking(
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [updates, setUpdates] = useState<TrackingUpdate[]>([]);
+  const { onTrackingUpdate } = options;
 
   useEffect(() => {
     if (!shipmentId) return;
@@ -111,7 +113,7 @@ export function useRealtimeTracking(
         (payload) => {
           const update = payload.new as TrackingUpdate;
           setUpdates((prev) => [update, ...prev]);
-          options.onTrackingUpdate?.(update);
+          onTrackingUpdate?.(update);
         }
       )
       .subscribe((status) => {
@@ -124,7 +126,7 @@ export function useRealtimeTracking(
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [shipmentId, options.onTrackingUpdate]);
+  }, [shipmentId, onTrackingUpdate]);
 
   return { isConnected, updates };
 }
@@ -146,6 +148,7 @@ export function useRealtimeNotifications(
   const [isConnected, setIsConnected] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const { onNotification } = options;
 
   useEffect(() => {
     if (!customerId) return;
@@ -164,7 +167,7 @@ export function useRealtimeNotifications(
           const notification = payload.new as Notification;
           setNotifications((prev) => [notification, ...prev]);
           setUnreadCount((prev) => prev + 1);
-          options.onNotification?.(notification);
+          onNotification?.(notification);
         }
       )
       .on(
@@ -192,7 +195,7 @@ export function useRealtimeNotifications(
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [customerId, options.onNotification]);
+  }, [customerId, onNotification]);
 
   const markAllAsRead = useCallback(async () => {
     if (!customerId) return;
@@ -232,6 +235,7 @@ export function useRealtimeStatusHistory(
   const channelRef = useRef<RealtimeChannel | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [history, setHistory] = useState<ShipmentStatusHistory[]>([]);
+  const { onStatusHistory } = options;
 
   useEffect(() => {
     if (!shipmentId) return;
@@ -249,7 +253,7 @@ export function useRealtimeStatusHistory(
         (payload) => {
           const entry = payload.new as ShipmentStatusHistory;
           setHistory((prev) => [entry, ...prev]);
-          options.onStatusHistory?.(entry);
+          onStatusHistory?.(entry);
         }
       )
       .subscribe((status) => {
@@ -262,7 +266,7 @@ export function useRealtimeStatusHistory(
       channel.unsubscribe();
       channelRef.current = null;
     };
-  }, [shipmentId, options.onStatusHistory]);
+  }, [shipmentId, onStatusHistory]);
 
   return { isConnected, history };
 }

@@ -5,11 +5,12 @@ import {
   updateShipmentLocation, 
   batchInsertTrackingLogs, 
   createShipment as apiCreateShipment,
+  updateShipment as apiUpdateShipment,
   updateShipmentStatus as apiUpdateShipmentStatus,
   subscribeToShipmentUpdates 
 } from '@/lib/api/shipments';
-import { useSimulation, SIMULATION_PATHS, generateTrackingNumber } from './useSimulation';
-import type { SimulationPath, ShipmentStatus, TrackingUpdate } from '@/types';
+import { useSimulation, generateTrackingNumber } from './useSimulation';
+import type { SimulationPath, Shipment, ShipmentStatus } from '@/types';
 
 // Batch configuration for tracking logs
 const BATCH_SIZE = 5;
@@ -44,7 +45,8 @@ export interface UseLiveShipmentReturn {
   shipmentId: string | null;
   trackingNumber: string | null;
   selectPath: (path: SimulationPath | null) => void;
-  createShipment: (path: SimulationPath) => Promise<string>;
+  createShipment: (path: SimulationPath) => Promise<Shipment>;
+  attachShipmentToPath: (shipment: Shipment, path: SimulationPath) => Promise<Shipment>;
   start: () => void;
   pause: () => void;
   resume: () => void;
@@ -66,14 +68,7 @@ export function useLiveShipment(): UseLiveShipmentReturn {
   const subscriptionRef = useRef<ReturnType<typeof subscribeToShipmentUpdates> | null>(null);
 
   // Enhanced simulation state with sync status
-  const [liveState, setLiveState] = useState<LiveShipmentState>({
-    isRunning: false,
-    isPaused: false,
-    currentIndex: 0,
-    progress: 0,
-    currentPosition: null,
-    heading: 0,
-    speedMultiplier: 1,
+  const [syncState, setSyncState] = useState<Pick<LiveShipmentState, 'dbSyncStatus' | 'lastSyncTime' | 'totalUpdates'>>({
     dbSyncStatus: 'idle',
     lastSyncTime: null,
     totalUpdates: 0,
@@ -89,7 +84,7 @@ export function useLiveShipment(): UseLiveShipmentReturn {
 
   // Update database sync status
   const setSyncStatus = useCallback((status: LiveShipmentState['dbSyncStatus']) => {
-    setLiveState(prev => ({ ...prev, dbSyncStatus: status }));
+    setSyncState(prev => ({ ...prev, dbSyncStatus: status }));
   }, []);
 
   // Update shipment location in database
@@ -104,7 +99,7 @@ export function useLiveShipment(): UseLiveShipmentReturn {
     try {
       await updateShipmentLocation(id, lat, lng, heading);
 
-      setLiveState(prev => ({
+      setSyncState(prev => ({
         ...prev,
         dbSyncStatus: 'synced',
         lastSyncTime: new Date(),
@@ -203,13 +198,6 @@ export function useLiveShipment(): UseLiveShipmentReturn {
 
     // Queue tracking log
     addTrackingLog(shipmentId, position[0], position[1], 'location-update');
-
-    // Update local state
-    setLiveState(prev => ({
-      ...prev,
-      currentPosition: position,
-      heading,
-    }));
   }, [shipmentId, updateLocation, addTrackingLog]);
 
   // Initialize simulation hook
@@ -225,22 +213,35 @@ export function useLiveShipment(): UseLiveShipmentReturn {
     setSpeedMultiplier: setSimulationSpeed,
   } = useSimulation(handlePositionUpdate);
 
-  // Sync simulation state with live state
-  useEffect(() => {
-    setLiveState(prev => ({
-      ...prev,
-      isRunning: simulationState.isRunning,
-      isPaused: simulationState.isPaused,
-      currentIndex: simulationState.currentIndex,
-      progress: simulationState.progress,
-      currentPosition: simulationState.currentPosition,
-      heading: simulationState.heading,
-      speedMultiplier: simulationState.speedMultiplier,
-    }));
-  }, [simulationState]);
+  const initializeLiveShipment = useCallback(async (
+    shipment: Shipment,
+    path: SimulationPath,
+    eventType: 'departure' | 'manual_update' = 'departure'
+  ): Promise<Shipment> => {
+    const originLat = path.path_data[0][0];
+    const originLng = path.path_data[0][1];
+
+    setShipmentId(shipment.id);
+    setTrackingNumber(shipment.tracking_number);
+    setSyncStatus('synced');
+
+    subscribeToUpdates(shipment.id);
+
+    addTrackingLog(
+      shipment.id,
+      originLat,
+      originLng,
+      eventType,
+      path.origin_city
+    );
+
+    addLog(`Shipment ready for live route: ${shipment.tracking_number}`);
+
+    return shipment;
+  }, [addLog, addTrackingLog, setSyncStatus, subscribeToUpdates]);
 
   // Create shipment from simulation path
-  const createShipment = useCallback(async (path: SimulationPath): Promise<string> => {
+  const createShipment = useCallback(async (path: SimulationPath): Promise<Shipment> => {
     const newTrackingNumber = generateTrackingNumber();
     
     try {
@@ -253,7 +254,7 @@ export function useLiveShipment(): UseLiveShipmentReturn {
 
       const shipment = await apiCreateShipment({
         tracking_number: newTrackingNumber,
-        status: 'pending',
+        status: 'pending_dropoff',
         origin_address: {
           street: '',
           city: path.origin_city || '',
@@ -296,32 +297,69 @@ export function useLiveShipment(): UseLiveShipmentReturn {
         volume_cbm: null,
       });
 
-      setShipmentId(shipment.id);
-      setTrackingNumber(newTrackingNumber);
-      setSyncStatus('synced');
-      
-      // Subscribe to real-time updates
-      subscribeToUpdates(shipment.id);
-      
-      // Add initial tracking log
-      addTrackingLog(
-        shipment.id,
-        originLat,
-        originLng,
-        'departure',
-        path.origin_city
-      );
-
       addLog(`Shipment created: ${newTrackingNumber}`);
-      
-      return shipment.id;
+
+      return initializeLiveShipment(shipment, path);
     } catch (error) {
       console.error('Failed to create shipment:', error);
       setSyncStatus('error');
       addLog(`Error: Failed to create shipment`);
       throw error;
     }
-  }, [addLog, addTrackingLog, setSyncStatus, subscribeToUpdates]);
+  }, [addLog, initializeLiveShipment, setSyncStatus]);
+
+  const attachShipmentToPath = useCallback(async (
+    shipment: Shipment,
+    path: SimulationPath
+  ): Promise<Shipment> => {
+    try {
+      setSyncStatus('syncing');
+
+      const originLat = path.path_data[0][0];
+      const originLng = path.path_data[0][1];
+      const destinationLat = path.path_data[path.path_data.length - 1][0];
+      const destinationLng = path.path_data[path.path_data.length - 1][1];
+
+      const nextStatus: Shipment['status'] = (
+        shipment.status === 'pending' ||
+        ['delivered', 'cancelled', 'returned'].includes(shipment.status)
+      )
+        ? 'pending_dropoff'
+        : shipment.status;
+
+      const updatedShipment = await apiUpdateShipment(shipment.id, {
+        status: nextStatus,
+        sub_status: null,
+        origin_address: {
+          street: '',
+          city: path.origin_city || '',
+          country: '',
+        },
+        destination_address: {
+          street: '',
+          city: path.destination_city || '',
+          country: '',
+        },
+        origin_lat: originLat,
+        origin_lng: originLng,
+        destination_lat: destinationLat,
+        destination_lng: destinationLng,
+        current_lat: originLat,
+        current_lng: originLng,
+        current_heading: 0,
+        transport_mode: path.transport_mode,
+      });
+
+      addLog(`Route attached to shipment: ${updatedShipment.tracking_number}`);
+
+      return initializeLiveShipment(updatedShipment, path, 'manual_update');
+    } catch (error) {
+      console.error('Failed to attach shipment to path:', error);
+      setSyncStatus('error');
+      addLog('Error: Failed to attach route to shipment');
+      throw error;
+    }
+  }, [addLog, initializeLiveShipment, setSyncStatus]);
 
   // Select path and auto-create shipment
   const selectPath = useCallback((path: SimulationPath | null) => {
@@ -330,19 +368,17 @@ export function useLiveShipment(): UseLiveShipmentReturn {
       // Reset shipment state when selecting new path
       setShipmentId(null);
       setTrackingNumber(null);
-      setLiveState(prev => ({
-        ...prev,
+      setSyncState({
         dbSyncStatus: 'idle',
         lastSyncTime: null,
         totalUpdates: 0,
-      }));
+      });
     }
   }, [selectSimulationPath]);
 
   // Set speed multiplier
   const setSpeedMultiplier = useCallback((speed: number) => {
     setSimulationSpeed(speed);
-    setLiveState(prev => ({ ...prev, speedMultiplier: speed }));
     addLog(`Speed set to ${speed}x`);
   }, [setSimulationSpeed, addLog]);
 
@@ -408,12 +444,11 @@ export function useLiveShipment(): UseLiveShipmentReturn {
     trackingLogQueue.current = [];
     setShipmentId(null);
     setTrackingNumber(null);
-    setLiveState(prev => ({
-      ...prev,
+    setSyncState({
       dbSyncStatus: 'idle',
       lastSyncTime: null,
       totalUpdates: 0,
-    }));
+    });
     addLog('Simulation reset');
   }, [resetSimulation, stopBatchProcessing, addLog]);
 
@@ -428,12 +463,16 @@ export function useLiveShipment(): UseLiveShipmentReturn {
   }, [stopBatchProcessing]);
 
   return {
-    state: liveState,
+    state: {
+      ...simulationState,
+      ...syncState,
+    },
     selectedPath,
     shipmentId,
     trackingNumber,
     selectPath,
     createShipment,
+    attachShipmentToPath,
     start,
     pause,
     resume,

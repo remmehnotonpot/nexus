@@ -1,4 +1,4 @@
-import type { Shipment, TrackingLog, Invoice, TransportMode, ShipmentStatus } from '@/types';
+import type { Shipment, TrackingLog, Invoice } from '@/types';
 
 export const createMockShipment = (overrides?: Partial<Shipment>): Shipment => {
   const base: Shipment = {

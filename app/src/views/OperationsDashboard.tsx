@@ -6,12 +6,13 @@ import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { getDashboardStats, getShipments } from '@/lib/api/operations';
-import type { DashboardStats, Shipment, ShipmentStatus } from '@/types';
+import { getOpsShipmentHref, getShipmentTrackingHref } from '@/lib/routes';
+import type { DashboardStats, Shipment } from '@/types';
 import { MobileHeader } from '@/components/mobile/MobileHeader';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { MobileShipmentCard } from '@/components/mobile/MobileShipmentCard';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRequireRole } from '@/hooks/useAuth';
@@ -21,9 +22,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Plus,
-  MapPin,
   RefreshCw,
-  Clock,
 } from 'lucide-react';
 
 interface StatCardProps {
@@ -124,7 +123,7 @@ function AlertItem({
 
 export function OperationsDashboard() {
   const router = useRouter();
-  const { hasRole, user } = useAuth();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [recentShipments, setRecentShipments] = useState<Shipment[]>([]);
@@ -252,13 +251,13 @@ export function OperationsDashboard() {
                 severity="critical"
                 message="Customs hold - documents needed"
                 trackingNumber="NXS-2024-015"
-                onClick={() => router.push('/ops/shipments/NXS-2024-015')}
+                onClick={() => router.push(getShipmentTrackingHref('NXS-2024-015'))}
               />
               <AlertItem
                 severity="high"
                 message="Delayed pickup (2h overdue)"
                 trackingNumber="NXS-2024-001"
-                onClick={() => router.push('/ops/shipments/NXS-2024-001')}
+                onClick={() => router.push(getShipmentTrackingHref('NXS-2024-001'))}
               />
             </div>
           </div>
@@ -285,8 +284,8 @@ export function OperationsDashboard() {
                 <MobileShipmentCard
                   key={shipment.id}
                   shipment={shipment}
-                  onUpdateStatus={() => router.push(`/ops/shipments/${shipment.id}/update`)}
-                  onViewMap={() => router.push(`/ops/shipments/${shipment.id}/map`)}
+                  onUpdateStatus={() => router.push(getOpsShipmentHref(shipment.id))}
+                  onViewMap={() => router.push(getShipmentTrackingHref(shipment.tracking_number))}
                 />
               ))
             )}

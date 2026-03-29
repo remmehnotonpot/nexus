@@ -3,7 +3,6 @@ import type {
   Shipment, 
   ShipmentWithRelations,
   ShipmentMilestone,
-  ShipmentStatusHistory,
   Exception,
   Document,
   ShipmentFilters,
@@ -11,7 +10,7 @@ import type {
   DashboardStats,
   ShipmentStatus,
 } from '@/types';
-import { NotFoundError, ValidationError } from '@/lib/errors';
+import { NotFoundError } from '@/lib/errors';
 
 interface InductShipmentData {
   actualWeightKg: number;
@@ -142,8 +141,12 @@ export async function getShipmentWithRelations(id: string): Promise<ShipmentWith
     { data: exceptions },
     { data: statusHistory },
   ] = await Promise.all([
-    supabase.from('customers').select('*').eq('id', shipment.customer_id).single(),
-    supabase.from('profiles').select('*').eq('id', shipment.assigned_driver_id).single(),
+    shipment.customer_id
+      ? supabase.from('customers').select('*').eq('id', shipment.customer_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
+    shipment.assigned_driver_id
+      ? supabase.from('profiles').select('*').eq('id', shipment.assigned_driver_id).maybeSingle()
+      : Promise.resolve({ data: null, error: null }),
     supabase.from('shipment_milestones').select('*').eq('shipment_id', id).order('sequence', { ascending: true }),
     supabase.from('documents').select('*').eq('shipment_id', id).order('created_at', { ascending: false }),
     supabase.from('exceptions').select('*').eq('shipment_id', id).order('created_at', { ascending: false }),

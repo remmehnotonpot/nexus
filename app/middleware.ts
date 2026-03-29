@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
 
-export async function middleware(_request: NextRequest) {
+export async function middleware() {
   // Auth currently lives in the browser via `@supabase/supabase-js`, which stores
   // the session client-side. Middleware cannot reliably read that session, so any
   // redirect decision here causes false "logged out" loops after a successful sign-in.

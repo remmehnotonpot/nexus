@@ -7,7 +7,6 @@ import {
   Phone,
   MessageCircle,
   BookOpen,
-  ArrowRight,
   ChevronRight
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';

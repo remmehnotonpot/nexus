@@ -27,8 +27,9 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SimulationController } from '@/components/SimulationController';
 import { DriverPingSimulator, type DriverPingSimulatorRef } from '@/components/DriverPingSimulator';
+import { getShipments as getTrackedShipments } from '@/lib/api/shipments';
 import { useAuth, useRequireRole } from '@/hooks/useAuth';
-import type { TransportMode, Shipment } from '@/types';
+import type { TransportMode, Shipment, SimulationPath } from '@/types';
 
 // MapLibre import
 import maplibregl from 'maplibre-gl';
@@ -65,6 +66,8 @@ interface ActiveSimulation {
   progress: number;
 }
 
+const CREATE_NEW_SHIPMENT_OPTION = '__create_new__';
+
 const AdminControl = () => {
   const { isLoading: authLoading } = useAuth();
   
@@ -83,15 +86,45 @@ const AdminControl = () => {
   // Active simulations list
   const [activeSimulations, setActiveSimulations] = useState<ActiveSimulation[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
+  const [availableShipments, setAvailableShipments] = useState<Shipment[]>([]);
+  const [isLoadingShipments, setIsLoadingShipments] = useState(true);
   
   // Selected shipment for driver ping
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+  const [selectedShipmentId, setSelectedShipmentId] = useState<string>(CREATE_NEW_SHIPMENT_OPTION);
+  const [selectedPath, setSelectedPath] = useState<SimulationPath | null>(null);
   
   // Click mode for map
   const [isClickMode, setIsClickMode] = useState(false);
 
   // Driver ping simulator ref to call methods
   const driverPingRef = useRef<DriverPingSimulatorRef | null>(null);
+
+  // Add log entry
+  const addLog = useCallback((message: string) => {
+    setLogs(prev => [
+      `[${new Date().toLocaleTimeString()}] ${message}`,
+      ...prev.slice(0, 49),
+    ]);
+  }, []);
+
+  useEffect(() => {
+    const fetchShipments = async () => {
+      setIsLoadingShipments(true);
+
+      try {
+        const shipments = await getTrackedShipments({ limit: 50 });
+        setAvailableShipments(shipments);
+      } catch (error) {
+        console.error('Failed to load shipments for admin control:', error);
+        addLog('Error: Failed to load shipments');
+      } finally {
+        setIsLoadingShipments(false);
+      }
+    };
+
+    fetchShipments();
+  }, [addLog]);
 
   // Initialize map
   useEffect(() => {
@@ -191,7 +224,7 @@ const AdminControl = () => {
     });
 
     // Update cursor in click mode
-    newMap.on('mousemove', (e) => {
+    newMap.on('mousemove', () => {
       if (isClickMode) {
         newMap.getCanvas().style.cursor = 'crosshair';
       }
@@ -202,7 +235,7 @@ const AdminControl = () => {
     return () => {
       newMap.remove();
     };
-  }, [mapStyle, isClickMode, selectedShipment]);
+  }, [mapStyle, isClickMode, selectedShipment, addLog]);
 
   // Update map style when changed
   useEffect(() => {
@@ -216,32 +249,34 @@ const AdminControl = () => {
     map.current.getCanvas().style.cursor = isClickMode ? 'crosshair' : '';
   }, [isClickMode]);
 
-  // Handle shipment created from SimulationController
-  const handleShipmentCreated = useCallback((shipmentId: string, trackingNumber: string) => {
-    addLog(`New shipment created: ${trackingNumber}`);
-    
-    // Create a mock shipment object for the driver ping simulator
-    // In a real app, you'd fetch the full shipment data
-    setSelectedShipment({
-      id: shipmentId,
-      tracking_number: trackingNumber,
-      status: 'in_transit',
-      origin_address: { street: '', city: 'Shanghai', country: 'China' },
-      destination_address: { street: '', city: 'Los Angeles', country: 'USA' },
-      origin_lat: 31.2304,
-      origin_lng: 121.4737,
-      destination_lat: 34.0522,
-      destination_lng: -118.2437,
-      current_lat: 31.2304,
-      current_lng: 121.4737,
-      current_heading: 45,
-      transport_mode: 'ocean',
-      weight_kg: 1000,
-      delivery_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-    } as unknown as Shipment);
-  }, []);
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    const routeSource = map.current.getSource('route') as maplibregl.GeoJSONSource | undefined;
+    if (!routeSource) return;
+
+    const coordinates = selectedPath
+      ? selectedPath.path_data.map(([lat, lng]) => [lng, lat])
+      : [];
+
+    routeSource.setData({
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates,
+      },
+    });
+
+    if (selectedPath && coordinates.length > 1) {
+      const bounds = coordinates.reduce(
+        (acc, coord) => acc.extend(coord as [number, number]),
+        new maplibregl.LngLatBounds(coordinates[0] as [number, number], coordinates[0] as [number, number])
+      );
+
+      map.current.fitBounds(bounds, { padding: 60, duration: 800 });
+    }
+  }, [mapLoaded, selectedPath]);
 
   // Handle location update from driver ping
   const handleLocationUpdate = useCallback((lat: number, lng: number) => {
@@ -259,15 +294,7 @@ const AdminControl = () => {
         clickMarkerRef.current = null;
       }, 3000);
     }
-  }, []);
-
-  // Add log entry
-  const addLog = useCallback((message: string) => {
-    setLogs(prev => [
-      `[${new Date().toLocaleTimeString()}] ${message}`,
-      ...prev.slice(0, 49),
-    ]);
-  }, []);
+  }, [addLog]);
 
   // Remove simulation from active list
   const removeSimulation = useCallback((id: string) => {
@@ -284,6 +311,87 @@ const AdminControl = () => {
     setIsClickMode(true);
     addLog('Click on the map to set position');
   }, [selectedShipment, addLog]);
+
+  const handleShipmentSelection = useCallback((value: string) => {
+    setSelectedShipmentId(value);
+
+    if (value === CREATE_NEW_SHIPMENT_OPTION) {
+      setSelectedShipment(null);
+      addLog('Switched to demo shipment creation mode');
+      return;
+    }
+
+    const shipment = availableShipments.find((item) => item.id === value) || null;
+    setSelectedShipment(shipment);
+
+    if (shipment) {
+      addLog(`Selected shipment: ${shipment.tracking_number}`);
+    }
+  }, [addLog, availableShipments]);
+
+  const handlePathSelected = useCallback((path: SimulationPath | null) => {
+    setSelectedPath(path);
+
+    if (path) {
+      addLog(`Route selected: ${path.name}`);
+    }
+  }, [addLog]);
+
+  const handleShipmentActivated = useCallback((shipment: Shipment) => {
+    setSelectedShipment(shipment);
+    setSelectedShipmentId(shipment.id);
+    setAvailableShipments((prev) => {
+      const existing = prev.filter((item) => item.id !== shipment.id);
+      return [shipment, ...existing];
+    });
+
+    addLog(`Live tracking bound to ${shipment.tracking_number}`);
+
+    if (selectedPath) {
+      setActiveSimulations((prev) => {
+        const rest = prev.filter((sim) => sim.id !== shipment.id);
+        return [
+          {
+            id: shipment.id,
+            trackingNumber: shipment.tracking_number,
+            pathName: selectedPath.name,
+            transportMode: selectedPath.transport_mode,
+            progress: 0,
+          },
+          ...rest,
+        ];
+      });
+    }
+  }, [addLog, selectedPath]);
+
+  const handleSimulationStateChange = useCallback((simulationState: {
+    shipmentId: string | null;
+    trackingNumber: string | null;
+    selectedPath: SimulationPath | null;
+    progress: number;
+  }) => {
+    if (!simulationState.shipmentId || !simulationState.trackingNumber || !simulationState.selectedPath) {
+      return;
+    }
+
+    const simulationId = simulationState.shipmentId;
+    const simulationTrackingNumber = simulationState.trackingNumber;
+    const simulationPath = simulationState.selectedPath;
+
+    setActiveSimulations((prev) => {
+      const rest = prev.filter((sim) => sim.id !== simulationId);
+      return [
+        {
+          id: simulationId,
+          trackingNumber: simulationTrackingNumber,
+          pathName: simulationPath.name,
+          transportMode: simulationPath.transport_mode,
+          progress: simulationState.progress,
+        },
+        ...rest,
+      ];
+    });
+  }, []);
 
   if (authLoading) {
     return (
@@ -471,10 +579,58 @@ const AdminControl = () => {
 
           {/* Right column - Controllers */}
           <div className="space-y-6">
+            <Card className="bg-slate-900 border-slate-800">
+              <CardHeader>
+                <CardTitle className="text-white text-lg">Shipment Binding</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="space-y-2">
+                  <label className="text-sm text-slate-400">Choose shipment</label>
+                  <Select value={selectedShipmentId} onValueChange={handleShipmentSelection}>
+                    <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
+                      <SelectValue placeholder="Select a shipment" />
+                    </SelectTrigger>
+                    <SelectContent className="bg-slate-800 border-slate-700">
+                      <SelectItem value={CREATE_NEW_SHIPMENT_OPTION} className="text-white hover:bg-slate-700">
+                        Create new demo shipment
+                      </SelectItem>
+                      {availableShipments.map((shipment) => (
+                        <SelectItem
+                          key={shipment.id}
+                          value={shipment.id}
+                          className="text-white hover:bg-slate-700"
+                        >
+                          {shipment.tracking_number}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {isLoadingShipments ? (
+                  <div className="text-xs text-slate-500">Loading shipments...</div>
+                ) : selectedShipment ? (
+                  <div className="rounded-lg bg-slate-800 p-3 space-y-1">
+                    <div className="text-sm font-medium text-white">{selectedShipment.tracking_number}</div>
+                    <div className="text-xs text-slate-400">
+                      Route selection and manual pings will use this shipment record.
+                    </div>
+                  </div>
+                ) : (
+                  <div className="rounded-lg bg-slate-800 p-3 text-xs text-slate-400">
+                    No shipment selected. Starting a route will create a new live demo shipment instead.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
             {/* Simulation Controller */}
             <SimulationController 
               variant="full"
-              onShipmentCreated={handleShipmentCreated}
+              onShipmentActivated={handleShipmentActivated}
+              onPathSelected={handlePathSelected}
+              onSimulationStateChange={handleSimulationStateChange}
+              selectedShipment={selectedShipment}
             />
 
             {/* Driver Ping Simulator */}

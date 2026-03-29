@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Search, 
@@ -37,7 +37,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { TrackingMap } from '@/components/TrackingMap';
 import { StatusBadge, LiveBadge } from '@/components/TransportMarker';
 import { useLiveTracking } from '@/hooks/useLiveTracking';
-import type { TrackingUpdate, TransportMode, ShipmentStatus, ShipmentStatusHistory } from '@/types';
+import type { TrackingUpdate, TransportMode, ShipmentStatusHistory } from '@/types';
 
 // ============================================
 // Status History Stepper Component
@@ -96,10 +96,8 @@ const STATUS_CONFIG: Record<string, { label: string; icon: React.ReactNode; colo
  */
 const StatusHistoryStepper = ({ 
   statusHistory,
-  currentStatus,
 }: { 
   statusHistory: ShipmentStatusHistory[];
-  currentStatus: string;
 }) => {
   // Sort by created_at descending (newest first)
   const sortedHistory = [...statusHistory].sort(
@@ -433,7 +431,6 @@ interface TrackingProps {
 
 const Tracking = ({ initialTrackingId }: TrackingProps) => {
   const router = useRouter();
-  const [trackingNumber, setTrackingNumber] = useState(initialTrackingId || '');
   const [showDetails, setShowDetails] = useState(false);
 
   // Use the new live tracking hook
@@ -449,15 +446,12 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
     refresh,
   } = useLiveTracking(initialTrackingId || null);
 
-  // Update tracking number when initialTrackingId changes
-  useEffect(() => {
-    setTrackingNumber(initialTrackingId || '');
-  }, [initialTrackingId]);
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (trackingNumber.trim()) {
-      router.push(`/tracking/${trackingNumber.trim()}`);
+    const formData = new FormData(e.currentTarget as HTMLFormElement);
+    const trackingNumber = String(formData.get('tracking-number') || '').trim();
+    if (trackingNumber) {
+      router.push(`/tracking/${trackingNumber}`);
     }
   };
 
@@ -507,15 +501,16 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
             <form onSubmit={handleSubmit} className="flex gap-2 max-w-md w-full">
               <div className="relative flex-1">
                 <Input
+                  key={initialTrackingId || 'tracking-input'}
+                  name="tracking-number"
                   type="text"
                   placeholder="Enter tracking number"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
+                  defaultValue={initialTrackingId || ''}
                   className="pl-10"
                 />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               </div>
-              <Button type="submit" disabled={isLoading || !trackingNumber.trim()}>
+              <Button type="submit" disabled={isLoading}>
                 {isLoading ? (
                   <RefreshCw className="w-4 h-4 animate-spin" />
                 ) : (
@@ -684,7 +679,6 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                 </h3>
                 <StatusHistoryStepper 
                   statusHistory={(shipment as unknown as { status_history?: ShipmentStatusHistory[] }).status_history || []}
-                  currentStatus={shipment.status}
                 />
               </div>
 
@@ -746,10 +740,7 @@ const Tracking = ({ initialTrackingId }: TrackingProps) => {
                 {['NXS-DEMO-001', 'NXS-78439201', 'NXS-12345678'].map((num) => (
                   <button
                     key={num}
-                    onClick={() => {
-                      setTrackingNumber(num);
-                      router.push(`/tracking/${num}`);
-                    }}
+                    onClick={() => router.push(`/tracking/${num}`)}
                     className="px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full hover:bg-orange-100 dark:hover:bg-orange-900/30 hover:text-orange-600 transition-colors"
                   >
                     {num}

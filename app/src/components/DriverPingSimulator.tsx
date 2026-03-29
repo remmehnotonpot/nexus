@@ -193,7 +193,7 @@ export const DriverPingSimulator = forwardRef<DriverPingSimulatorRef, DriverPing
         setIsUpdating(false);
         clearStatusAfterDelay();
       }
-    }, [shipment, latitude, longitude, heading, notes, userId, onLocationUpdate, clearStatusAfterDelay]);
+    }, [shipment, latitude, longitude, heading, userId, onLocationUpdate, clearStatusAfterDelay]);
 
     /**
      * Use browser geolocation to fill coordinates
@@ -246,21 +246,24 @@ export const DriverPingSimulator = forwardRef<DriverPingSimulatorRef, DriverPing
       const coords = getShipmentCoordinates(shipment);
 
       switch (preset) {
-        case 'origin':
+        case 'origin': {
           setLatitude(coords.origin.lat.toFixed(6));
           setLongitude(coords.origin.lng.toFixed(6));
           break;
-        case 'destination':
+        }
+        case 'destination': {
           setLatitude(coords.destination.lat.toFixed(6));
           setLongitude(coords.destination.lng.toFixed(6));
           break;
-        case 'midpoint':
+        }
+        case 'midpoint': {
           // Calculate midpoint between origin and destination
           const midLat = (coords.origin.lat + coords.destination.lat) / 2;
           const midLng = (coords.origin.lng + coords.destination.lng) / 2;
           setLatitude(midLat.toFixed(6));
           setLongitude(midLng.toFixed(6));
           break;
+        }
       }
       setActiveTab('manual');
       setSelectedLocation(null);

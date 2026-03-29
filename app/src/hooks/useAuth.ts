@@ -41,6 +41,10 @@ export function useAuth(): UseAuthReturn {
   }), []);
 
   const fetchProfile = useCallback(async (userId: string): Promise<Profile | null> => {
+    if (!userId) {
+      return null;
+    }
+
     console.log('[useAuth] Fetching profile for:', userId);
     const { data, error } = await supabase
       .from('profiles')
@@ -68,7 +72,7 @@ export function useAuth(): UseAuthReturn {
         user: prev.user ? mapToAuthUser({ id: prev.user.id, email: prev.user.email } as User, profile) : null,
       }));
     }
-  }, [state.user?.id, fetchProfile, mapToAuthUser]);
+  }, [state.user, fetchProfile, mapToAuthUser]);
 
   useEffect(() => {
     const initializeAuth = async () => {

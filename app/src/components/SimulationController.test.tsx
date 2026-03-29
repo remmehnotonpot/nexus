@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { SimulationController } from './SimulationController';
+import { createMockShipment } from '@/test/mocks/data';
 
 vi.mock('@/lib/supabase', () => ({
   supabase: {
@@ -43,5 +44,13 @@ describe('SimulationController', () => {
     
     const createButton = screen.getByText('Create & Start');
     expect(createButton).toBeDisabled();
+  });
+
+  it('renders existing-shipment mode when a shipment is selected', () => {
+    render(<SimulationController selectedShipment={createMockShipment({ tracking_number: 'NXS-LIVE-001' })} />);
+
+    expect(screen.getByText('Selected Shipment')).toBeInTheDocument();
+    expect(screen.getByText('NXS-LIVE-001')).toBeInTheDocument();
+    expect(screen.getByText('Attach Route & Start')).toBeDisabled();
   });
 });

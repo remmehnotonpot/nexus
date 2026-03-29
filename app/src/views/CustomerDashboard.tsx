@@ -8,12 +8,12 @@ import { useAuth, useRequireRole } from '@/hooks/useAuth';
 import { getShipments } from '@/lib/api/shipments';
 import { getCustomerQuotes } from '@/lib/api/quotes';
 import { useRealtimeNotifications } from '@/hooks/useRealtime';
-import type { Shipment, DashboardStats } from '@/types';
+import type { Shipment } from '@/types';
 import type { Quote } from '@/lib/api/quotes';
 
 // UI Components
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MobileShipmentCard } from '@/components/mobile/MobileShipmentCard';
@@ -25,40 +25,12 @@ import {
   Package,
   Truck,
   CheckCircle,
-  Clock,
   FileText,
   Bell,
   Plus,
   ChevronRight,
   AlertCircle,
 } from 'lucide-react';
-
-// Status badge component
-function StatusBadge({ status }: { status: string }) {
-  const variants: Record<string, string> = {
-    pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-    in_transit: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-    delivered: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-    exception: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-    customs: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-    out_for_delivery: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200',
-  };
-
-  const labels: Record<string, string> = {
-    pending: 'Pending',
-    in_transit: 'In Transit',
-    delivered: 'Delivered',
-    exception: 'Exception',
-    customs: 'In Customs',
-    out_for_delivery: 'Out for Delivery',
-  };
-
-  return (
-    <Badge variant="outline" className={cn("text-xs", variants[status] || variants.pending)}>
-      {labels[status] || status}
-    </Badge>
-  );
-}
 
 // Stat card component
 interface StatCardProps {

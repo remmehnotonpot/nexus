@@ -4,7 +4,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
-import { NotFoundError, DatabaseError } from '@/lib/errors';
+import { DatabaseError } from '@/lib/errors';
 import type { Shipment, TrackingUpdate, ShipmentStatusHistory } from '@/types';
 
 /**
@@ -197,6 +197,35 @@ export async function createShipment(
 
   if (!data) {
     throw new DatabaseError('No data returned from create shipment');
+  }
+
+  return data;
+}
+
+/**
+ * Update an existing shipment and return the updated row
+ */
+export async function updateShipment(
+  shipmentId: string,
+  updates: Partial<Shipment>
+): Promise<Shipment> {
+  const { data, error } = await supabase
+    .from('shipments')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', shipmentId)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error updating shipment:', error);
+    throw new DatabaseError('Failed to update shipment');
+  }
+
+  if (!data) {
+    throw new DatabaseError('No data returned from update shipment');
   }
 
   return data;

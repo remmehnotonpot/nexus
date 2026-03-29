@@ -20,7 +20,6 @@ import {
   BarChart3,
   Award,
   Quote,
-  ChevronRight,
   Phone,
   Mail,
   MapPin

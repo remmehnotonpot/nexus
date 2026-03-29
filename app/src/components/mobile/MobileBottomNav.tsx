@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -9,9 +8,7 @@ import {
   Home,
   Package,
   PlusCircle,
-  MessageCircle,
   Menu,
-  LayoutDashboard,
   MapPin,
 } from 'lucide-react';
 
@@ -27,7 +24,6 @@ interface NavItem {
 export function MobileBottomNav() {
   const pathname = usePathname();
   const { isStaff } = useAuth();
-  const [isExpanded, setIsExpanded] = useState(false);
 
   const isOpsRoute = pathname?.startsWith('/ops');
 

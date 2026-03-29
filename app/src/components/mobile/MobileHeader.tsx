@@ -3,15 +3,12 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import {
   Bell,
   User,
   LogOut,
-  Menu,
-  X,
   ChevronLeft,
 } from 'lucide-react';
 import {

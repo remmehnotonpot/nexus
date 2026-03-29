@@ -43,7 +43,6 @@ import {
   Ship,
   Truck,
   Train,
-  Package,
   ArrowRight,
   Loader2,
 } from 'lucide-react';

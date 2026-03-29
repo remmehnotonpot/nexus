@@ -30,6 +30,62 @@ const ANIMATION_DURATION_MS = 1500; // 1.5 seconds for smooth movement
 const BOUNDS_PADDING = 100; // Padding in pixels when fitting bounds
 const EDGE_THRESHOLD_PERCENT = 0.2; // 20% of viewport triggers re-centering
 
+function getTransportIconSvg(mode: TransportMode, planeSvg: string = ''): string {
+  if (mode === 'air' && planeSvg) {
+    return planeSvg;
+  }
+
+  const icons: Record<TransportMode, string> = {
+    air: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>',
+    ocean: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 16.5c.65 0 1.25-.25 1.7-.7 1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7V14c-.65 0-1.25-.25-1.7-.7-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7v2.5zM2 11c.65 0 1.25-.25 1.7-.7 1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7V8.5c-.65 0-1.25-.25-1.7-.7-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7V11z"/></svg>',
+    road: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 18.5c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5-1.5.67-1.5 1.5.67 1.5 1.5 1.5zM6 18.5c.83 0 1.5-.67 1.5-1.5S6.83 15.5 6 15.5 4.5 16.17 4.5 17s.67 1.5 1.5 1.5zM17 11h-1V8h-2v3H8V8H6v3H5c-1.66 0-3 1.34-3 3v7h2.5v-2h11v2H20v-7c0-1.66-1.34-3-3-3z"/></svg>',
+    rail: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h12v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>',
+    multimodal: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8 2 4 2.5 4 6v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h12v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>',
+  };
+
+  return icons[mode];
+}
+
+function createMarkerElement(
+  rotation: number,
+  mode: TransportMode,
+  planeSvg: string = ''
+): HTMLElement {
+  const markerEl = document.createElement('div');
+  markerEl.className = 'relative';
+  markerEl.style.width = '48px';
+  markerEl.style.height = '48px';
+
+  const iconSvg = getTransportIconSvg(mode, planeSvg);
+
+  markerEl.innerHTML = `
+    <div class="relative flex items-center justify-center" style="width: 48px; height: 48px;">
+      <div class="absolute inset-0 rounded-full bg-sky-500 opacity-20 animate-ping"></div>
+      <div class="relative z-10 w-3/4 h-3/4 transport-icon" style="color: #0EA5E9;">
+        ${iconSvg}
+      </div>
+      <div class="absolute w-2 h-2 bg-sky-500 rounded-full"></div>
+    </div>
+  `;
+
+  return markerEl;
+}
+
+function easeInOutCubic(t: number): number {
+  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+}
+
+function interpolatePosition(
+  start: [number, number],
+  end: [number, number],
+  progress: number
+): [number, number] {
+  return [
+    start[0] + (end[0] - start[0]) * progress,
+    start[1] + (end[1] - start[1]) * progress,
+  ];
+}
+
 export const TrackingMap = ({
   shipment,
   trackingHistory,
@@ -43,6 +99,7 @@ export const TrackingMap = ({
   const map = useRef<maplibregl.Map | null>(null);
   const markerRef = useRef<maplibregl.Marker | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const planeSvgRef = useRef<string>('');
   
   // Animation refs
   const animationFrameRef = useRef<number | null>(null);
@@ -181,27 +238,6 @@ export const TrackingMap = ({
   }, [mapStyle]);
 
   /**
-   * Easing function for smooth movement (ease-in-out-cubic)
-   */
-  const easeInOutCubic = (t: number): number => {
-    return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-  };
-
-  /**
-   * Linear interpolation between two coordinates
-   */
-  const interpolatePosition = (
-    start: [number, number],
-    end: [number, number],
-    progress: number
-  ): [number, number] => {
-    return [
-      start[0] + (end[0] - start[0]) * progress,
-      start[1] + (end[1] - start[1]) * progress,
-    ];
-  };
-
-  /**
    * Check if marker is near the edge of the viewport
    */
   const isNearEdge = useCallback((lngLat: maplibregl.LngLat): boolean => {
@@ -225,7 +261,7 @@ export const TrackingMap = ({
   /**
    * Animation loop for smooth marker movement
    */
-  const animateMarker = useCallback((timestamp: number) => {
+  const animateMarker = useCallback(function animateFrame(timestamp: number): void {
     if (!animationStartTimeRef.current) {
       animationStartTimeRef.current = timestamp;
     }
@@ -260,7 +296,7 @@ export const TrackingMap = ({
     }
 
     if (progress < 1) {
-      animationFrameRef.current = requestAnimationFrame(animateMarker);
+      animationFrameRef.current = requestAnimationFrame(animateFrame);
     } else {
       // Animation complete
       animationStartTimeRef.current = null;
@@ -288,7 +324,7 @@ export const TrackingMap = ({
 
     // If no marker exists, create one immediately (no animation on initial load)
     if (!markerRef.current) {
-      const markerEl = createMarkerElement(markerHeading, mode);
+      const markerEl = createMarkerElement(markerHeading, mode, planeSvgRef.current);
       
       const marker = new maplibregl.Marker({
         element: markerEl,
@@ -320,7 +356,7 @@ export const TrackingMap = ({
     const markerEl = markerRef.current.getElement();
     const iconContainer = markerEl.querySelector('.transport-icon');
     if (iconContainer) {
-      iconContainer.innerHTML = getTransportIconSvg(mode);
+      iconContainer.innerHTML = getTransportIconSvg(mode, planeSvgRef.current);
     }
 
     if (animate && currentPositionRef.current) {
@@ -337,9 +373,6 @@ export const TrackingMap = ({
     }
   }, [animateMarker]);
 
-  // Store the plane SVG content
-  const planeSvgRef = useRef<string>('');
-
   // Fetch plane SVG on mount
   useEffect(() => {
     fetch('/plane-marker.svg')
@@ -352,30 +385,6 @@ export const TrackingMap = ({
         planeSvgRef.current = '';
       });
   }, []);
-
-  /**
-   * Create marker DOM element
-   */
-  const createMarkerElement = (rotation: number, mode: TransportMode): HTMLElement => {
-    const markerEl = document.createElement('div');
-    markerEl.className = 'relative';
-    markerEl.style.width = '48px';
-    markerEl.style.height = '48px';
-
-    const iconSvg = getTransportIconSvg(mode, planeSvgRef.current);
-    
-    markerEl.innerHTML = `
-      <div class="relative flex items-center justify-center" style="width: 48px; height: 48px;">
-        <div class="absolute inset-0 rounded-full bg-sky-500 opacity-20 animate-ping"></div>
-        <div class="relative z-10 w-3/4 h-3/4 transport-icon" style="color: #0EA5E9;">
-          ${iconSvg}
-        </div>
-        <div class="absolute w-2 h-2 bg-sky-500 rounded-full"></div>
-      </div>
-    `;
-
-    return markerEl;
-  };
 
   /**
    * Update the route line source with new coordinates
@@ -573,23 +582,6 @@ export const TrackingMap = ({
       updateRouteLine(trailCoordinates);
     }
   }, [targetPosition, heading, shipment, trackingHistory, mapLoaded, updateMarker, updateRouteLine, buildFlightTrail]);
-
-  // Helper function to get transport icon SVG
-  const getTransportIconSvg = (mode: TransportMode, planeSvg: string = ''): string => {
-    // Use plane SVG for air mode if available
-    if (mode === 'air' && planeSvg) {
-      return planeSvg;
-    }
-    
-    const icons: Record<TransportMode, string> = {
-      air: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/></svg>',
-      ocean: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 16.5c.65 0 1.25-.25 1.7-.7 1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7V14c-.65 0-1.25-.25-1.7-.7-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7v2.5zM2 11c.65 0 1.25-.25 1.7-.7 1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7s1.25-.25 1.7-.7c1.35-1.35 3.55-1.35 4.9 0 .45.45 1.05.7 1.7.7V8.5c-.65 0-1.25-.25-1.7-.7-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7s-1.25-.25-1.7-.7c-1.35-1.35-3.55-1.35-4.9 0-.45.45-1.05.7-1.7.7V11z"/></svg>',
-      road: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18 18.5c.83 0 1.5-.67 1.5-1.5s-.67-1.5-1.5-1.5-1.5.67-1.5 1.5.67 1.5 1.5 1.5zM6 18.5c.83 0 1.5-.67 1.5-1.5S6.83 15.5 6 15.5 4.5 16.17 4.5 17s.67 1.5 1.5 1.5zM17 11h-1V8h-2v3H8V8H6v3H5c-1.66 0-3 1.34-3 3v7h2.5v-2h11v2H20v-7c0-1.66-1.34-3-3-3z"/></svg>',
-      rail: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c-4 0-8 .5-8 4v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h12v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>',
-      multimodal: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8 2 4 2.5 4 6v9.5C4 17.43 5.57 19 7.5 19L6 20.5v.5h12v-.5L16.5 19c1.93 0 3.5-1.57 3.5-3.5V6c0-3.5-3.58-4-8-4zM7.5 17c-.83 0-1.5-.67-1.5-1.5S6.67 14 7.5 14s1.5.67 1.5 1.5S8.33 17 7.5 17zm3.5-6H6V6h5v5zm2 0V6h5v5h-5zm3.5 6c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/></svg>',
-    };
-    return icons[mode];
-  };
 
   // Helper to get origin/destination for display
   const getShipmentInfo = (shipment: Shipment) => {

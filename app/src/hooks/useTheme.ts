@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -13,47 +13,37 @@ export function useTheme() {
     return 'system';
   });
 
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('light');
-
-  const resolveTheme = useCallback((t: Theme): 'light' | 'dark' => {
-    if (t === 'system') {
+  const [systemTheme, setSystemTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
-    return t;
-  }, []);
+    return 'light';
+  });
+
+  const resolvedTheme = useMemo(() => {
+    return theme === 'system' ? systemTheme : theme;
+  }, [systemTheme, theme]);
 
   useEffect(() => {
-    const resolved = resolveTheme(theme);
-    setResolvedTheme(resolved);
-    
     const root = document.documentElement;
-    if (resolved === 'dark') {
+    if (resolvedTheme === 'dark') {
       root.classList.add('dark');
     } else {
       root.classList.remove('dark');
     }
     
     localStorage.setItem(THEME_STORAGE_KEY, theme);
-  }, [theme, resolveTheme]);
+  }, [resolvedTheme, theme]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
     const handleChange = () => {
-      if (theme === 'system') {
-        const resolved = mediaQuery.matches ? 'dark' : 'light';
-        setResolvedTheme(resolved);
-        const root = document.documentElement;
-        if (resolved === 'dark') {
-          root.classList.add('dark');
-        } else {
-          root.classList.remove('dark');
-        }
-      }
+      setSystemTheme(mediaQuery.matches ? 'dark' : 'light');
     };
 
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
-  }, [theme]);
+  }, []);
 
   const setLight = useCallback(() => setTheme('light'), []);
   const setDark = useCallback(() => setTheme('dark'), []);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth, useRequireRole } from '@/hooks/useAuth';
@@ -20,7 +20,6 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   FileText,
   Plus,
-  ArrowLeft,
   CheckCircle,
   XCircle,
   AlertCircle,
@@ -59,11 +58,7 @@ export default function CustomerQuotesPage() {
 
   useRequireRole(['customer'], '/ops/dashboard');
 
-  useEffect(() => {
-    fetchQuotes();
-  }, [user?.id]);
-
-  const fetchQuotes = async () => {
+  const fetchQuotes = useCallback(async () => {
     if (!user?.id) return;
 
     setIsLoading(true);
@@ -76,7 +71,11 @@ export default function CustomerQuotesPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [activeTab, user?.id]);
+
+  useEffect(() => {
+    fetchQuotes();
+  }, [fetchQuotes]);
 
   const filterQuotes = (data: Quote[], tab: string) => {
     if (tab === 'active') {

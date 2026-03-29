@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { 
   Play, 
   Pause, 
@@ -36,11 +36,20 @@ import {
 import { useLiveShipment } from '@/hooks/useLiveShipment';
 import { SIMULATION_PATHS } from '@/hooks/useSimulation';
 import { cn } from '@/lib/utils';
-import type { SimulationPath, TransportMode } from '@/types';
+import type { Shipment, SimulationPath, TransportMode } from '@/types';
 
 interface SimulationControllerProps {
   variant?: 'full' | 'compact';
   onShipmentCreated?: (shipmentId: string, trackingNumber: string) => void;
+  onShipmentActivated?: (shipment: Shipment) => void;
+  onPathSelected?: (path: SimulationPath | null) => void;
+  onSimulationStateChange?: (state: {
+    shipmentId: string | null;
+    trackingNumber: string | null;
+    selectedPath: SimulationPath | null;
+    progress: number;
+  }) => void;
+  selectedShipment?: Shipment | null;
   className?: string;
 }
 
@@ -114,6 +123,10 @@ const SyncStatusBadge = ({
 export function SimulationController({ 
   variant = 'full',
   onShipmentCreated,
+  onShipmentActivated,
+  onPathSelected,
+  onSimulationStateChange,
+  selectedShipment,
   className 
 }: SimulationControllerProps) {
   const [selectedPathId, setSelectedPathId] = useState<string>('');
@@ -127,6 +140,7 @@ export function SimulationController({
     trackingNumber,
     selectPath,
     createShipment,
+    attachShipmentToPath,
     start,
     pause,
     resume,
@@ -140,9 +154,8 @@ export function SimulationController({
     setSelectedPathId(pathId);
     const path = SIMULATION_PATHS.find(p => p.id === pathId);
     
-    if (path) {
-      selectPath(path);
-    }
+    selectPath(path || null);
+    onPathSelected?.(path || null);
   };
 
   const handleCreateAndStart = async () => {
@@ -150,9 +163,13 @@ export function SimulationController({
     
     setIsCreating(true);
     try {
-      const id = await createShipment(selectedPath);
-      if (trackingNumber && onShipmentCreated) {
-        onShipmentCreated(id, trackingNumber);
+      if (selectedShipment) {
+        const activatedShipment = await attachShipmentToPath(selectedShipment, selectedPath);
+        onShipmentActivated?.(activatedShipment);
+      } else {
+        const createdShipment = await createShipment(selectedPath);
+        onShipmentActivated?.(createdShipment);
+        onShipmentCreated?.(createdShipment.id, createdShipment.tracking_number);
       }
       start();
     } catch (error) {
@@ -161,6 +178,15 @@ export function SimulationController({
       setIsCreating(false);
     }
   };
+
+  useEffect(() => {
+    onSimulationStateChange?.({
+      shipmentId,
+      trackingNumber,
+      selectedPath,
+      progress: state.progress,
+    });
+  }, [onSimulationStateChange, shipmentId, trackingNumber, selectedPath, state.progress]);
 
   const handleCopyTrackingNumber = () => {
     if (trackingNumber) {
@@ -184,6 +210,24 @@ export function SimulationController({
         {/* Path Selection */}
         {!state.isRunning && !shipmentId && (
           <div className="space-y-2">
+            {selectedShipment ? (
+              <div className="p-3 bg-orange-500/10 border border-orange-500/30 rounded-lg space-y-1">
+                <div className="text-xs uppercase tracking-wide text-orange-400">Selected Shipment</div>
+                <div className="text-sm font-medium text-white">{selectedShipment.tracking_number}</div>
+                <div className="text-xs text-slate-400">
+                  The selected route will be attached to this shipment and drive its public tracking page live.
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-800 rounded-lg space-y-1">
+                <div className="text-xs uppercase tracking-wide text-slate-400">Mode</div>
+                <div className="text-sm font-medium text-white">Create New Demo Shipment</div>
+                <div className="text-xs text-slate-400">
+                  No shipment selected, so starting a route will create a new tracking number.
+                </div>
+              </div>
+            )}
+
             <label className="text-sm text-slate-400">Select Route</label>
             <Select value={selectedPathId} onValueChange={handlePathSelect}>
               <SelectTrigger className="bg-slate-800 border-slate-700 text-white">
@@ -229,12 +273,12 @@ export function SimulationController({
               {isCreating ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                  Creating...
+                  {selectedShipment ? 'Binding Route...' : 'Creating...'}
                 </>
               ) : (
                 <>
                   <Plus className="w-4 h-4 mr-2" />
-                  Create & Start
+                  {selectedShipment ? 'Attach Route & Start' : 'Create & Start'}
                 </>
               )}
             </Button>

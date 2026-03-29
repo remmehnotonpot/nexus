@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { getShipmentTrackingHref } from '@/lib/routes';
 import { useAuth } from '@/hooks/useAuth';
 import { getShipmentWithRelations, inductShipment, updateShipmentStatus } from '@/lib/api/operations';
 import type { ShipmentWithRelations, ShipmentStatus, IntakeStatus, ActiveStatus } from '@/types';
@@ -15,7 +15,6 @@ import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { MobileStatusUpdate } from '@/components/mobile/MobileStatusUpdate';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useRequireRole } from '@/hooks/useAuth';
@@ -38,23 +37,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import {
   Package,
   MapPin,
   Phone,
   Mail,
   FileText,
-  User,
   Truck,
-  Calendar,
   Weight,
-  Box,
   AlertCircle,
   CheckCircle,
   Circle,
   Clock,
-  ArrowRight,
   Plane,
   Ship,
   Train,
@@ -89,7 +84,6 @@ const transportIcons = {
 };
 
 function TimelineItem({
-  status,
   title,
   subtitle,
   date,
@@ -97,7 +91,6 @@ function TimelineItem({
   isCurrent,
   isLast,
 }: {
-  status: 'completed' | 'current' | 'pending';
   title: string;
   subtitle?: string;
   date?: string;
@@ -179,7 +172,7 @@ function InductPackageModal({
     register,
     handleSubmit,
     formState: { errors },
-    watch,
+    control,
     setValue,
     reset,
   } = useForm<StaffInductionInput>({
@@ -195,7 +188,10 @@ function InductPackageModal({
     },
   });
 
-  const newStatus = watch('new_status');
+  const newStatus = useWatch({
+    control,
+    name: 'new_status',
+  });
 
   const handleFormSubmit = async (data: StaffInductionInput) => {
     await onSubmit(data);
@@ -203,9 +199,13 @@ function InductPackageModal({
   };
 
   // Calculate volume from dimensions
-  const length = watch('actual_dimensions.length') || 0;
-  const width = watch('actual_dimensions.width') || 0;
-  const height = watch('actual_dimensions.height') || 0;
+  const actualDimensions = useWatch({
+    control,
+    name: 'actual_dimensions',
+  });
+  const length = actualDimensions?.length || 0;
+  const width = actualDimensions?.width || 0;
+  const height = actualDimensions?.height || 0;
   const calculatedVolume = (length * width * height) / 1000000; // Convert cm³ to m³
 
   return (
@@ -365,7 +365,7 @@ function InductPackageModal({
 
 export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
   const router = useRouter();
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const [shipment, setShipment] = useState<ShipmentWithRelations | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -380,11 +380,7 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
   // Check if user can update status
   const canUpdateStatus = profile && STATUS_UPDATE_ROLES.includes(profile.role as typeof STATUS_UPDATE_ROLES[number]);
 
-  useEffect(() => {
-    fetchShipment();
-  }, [shipmentId]);
-
-  const fetchShipment = async () => {
+  const fetchShipment = useCallback(async () => {
     setIsLoading(true);
     try {
       const data = await getShipmentWithRelations(shipmentId);
@@ -396,7 +392,11 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [shipmentId]);
+
+  useEffect(() => {
+    void fetchShipment();
+  }, [fetchShipment]);
 
   const handleStatusUpdate = async (updateData: {
     status: ShipmentStatus;
@@ -406,20 +406,27 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
   }) => {
     if (!profile || !shipment) return;
 
-    await updateShipmentStatus(
-      shipmentId,
-      {
-        status: updateData.status,
-        subStatus: updateData.subStatus,
-        notes: updateData.notes,
-        notifyCustomer: updateData.notifyCustomer,
-      },
-      profile.id,
-      profile.role
-    );
+    try {
+      setError(null);
 
-    // Refresh shipment data
-    await fetchShipment();
+      await updateShipmentStatus(
+        shipmentId,
+        {
+          status: updateData.status,
+          subStatus: updateData.subStatus,
+          notes: updateData.notes,
+          notifyCustomer: updateData.notifyCustomer,
+        },
+        profile.id,
+        profile.role
+      );
+
+      await fetchShipment();
+    } catch (err) {
+      console.error('Error updating shipment status:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update shipment status');
+      throw err;
+    }
   };
 
   /**
@@ -597,7 +604,11 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
                 <p className="text-xs text-muted-foreground">{destination.country}</p>
               </div>
             </div>
-            <Button variant="outline" className="w-full" onClick={() => router.push(`/ops/shipments/${shipmentId}/map`)}>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => router.push(getShipmentTrackingHref(shipment.tracking_number))}
+            >
               <MapPin className="mr-2 h-4 w-4" />
               View on Map
             </Button>
@@ -615,7 +626,6 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
                 shipment.status_history.map((historyItem, index) => (
                   <TimelineItem
                     key={historyItem.id}
-                    status={index === 0 ? 'current' : 'completed'}
                     title={statusConfig[historyItem.new_status as ShipmentStatus]?.label || historyItem.new_status}
                     subtitle={historyItem.notes || `Changed from ${statusConfig[historyItem.previous_status as ShipmentStatus]?.label || historyItem.previous_status}`}
                     date={historyItem.created_at || undefined}
@@ -626,7 +636,6 @@ export function ShipmentDetail({ shipmentId }: ShipmentDetailProps) {
                 ))
               ) : (
                 <TimelineItem
-                  status="completed"
                   title="Shipment Created"
                   date={shipment.created_at || undefined}
                   isCompleted={true}

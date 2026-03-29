@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import type { Customer, TablesInsert, TablesUpdate } from '@/types';
+import type { Customer } from '@/types';
 import { NotFoundError, ValidationError } from '@/lib/errors';
 
 export interface CreateCustomerData {

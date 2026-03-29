@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { 
   createInvoiceSchema, 
   updateInvoiceSchema, 
-  processPaymentSchema,
-  invoiceStatusSchema 
+  processPaymentSchema
 } from './invoice';
 
 describe('Invoice Schemas', () => {

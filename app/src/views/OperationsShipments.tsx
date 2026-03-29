@@ -3,8 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { cn } from '@/lib/utils';
-import { useAuth } from '@/hooks/useAuth';
+import { getOpsShipmentHref, getShipmentTrackingHref } from '@/lib/routes';
 import { getShipments } from '@/lib/api/operations';
 import type { Shipment, ShipmentStatus, TransportMode } from '@/types';
 import { MobileHeader } from '@/components/mobile/MobileHeader';
@@ -18,7 +17,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useRequireRole } from '@/hooks/useAuth';
 import {
   Search,
-  Filter,
   Plus,
   Package,
   X,
@@ -64,7 +62,6 @@ const transportFilters: { value: TransportMode | 'all'; label: string }[] = [
 export function OperationsShipments() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user } = useAuth();
   
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -283,8 +280,8 @@ export function OperationsShipments() {
               <MobileShipmentCard
                 key={shipment.id}
                 shipment={shipment}
-                onUpdateStatus={() => router.push(`/ops/shipments/${shipment.id}/update`)}
-                onViewMap={() => router.push(`/ops/shipments/${shipment.id}/map`)}
+                onUpdateStatus={() => router.push(getOpsShipmentHref(shipment.id))}
+                onViewMap={() => router.push(getShipmentTrackingHref(shipment.tracking_number))}
               />
             ))
           )}

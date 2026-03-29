@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth, useRequireRole } from '@/hooks/useAuth';
 import { getShipments } from '@/lib/api/shipments';
 import { useRealtimeShipment } from '@/hooks/useRealtime';
-import type { Shipment, ShipmentStatus } from '@/types';
+import type { Shipment } from '@/types';
 
 // UI Components
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { MobileHeader } from '@/components/mobile/MobileHeader';
@@ -22,8 +21,6 @@ import { MobileShipmentCard } from '@/components/mobile/MobileShipmentCard';
 import {
   Package,
   Search,
-  ArrowLeft,
-  AlertCircle,
 } from 'lucide-react';
 
 const STATUS_TABS: { value: string; label: string }[] = [
@@ -45,28 +42,8 @@ export function CustomerShipments() {
   // Require customer role
   useRequireRole(['customer'], '/ops/shipments');
 
-  // Fetch shipments
-  useEffect(() => {
-    const fetchShipments = async () => {
-      if (!user?.id) return;
-
-      setIsLoading(true);
-      try {
-        const data = await getShipments({ customerId: user.id });
-        setShipments(data);
-        filterShipments(data, activeTab, searchQuery);
-      } catch (error) {
-        console.error('Error fetching shipments:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchShipments();
-  }, [user?.id]);
-
   // Filter shipments based on tab and search
-  const filterShipments = (data: Shipment[], tab: string, search: string) => {
+  const filterShipments = useCallback((data: Shipment[], tab: string, search: string) => {
     let filtered = [...data];
 
     // Filter by status tab
@@ -94,7 +71,27 @@ export function CustomerShipments() {
     }
 
     setFilteredShipments(filtered);
-  };
+  }, []);
+
+  // Fetch shipments
+  useEffect(() => {
+    const fetchShipments = async () => {
+      if (!user?.id) return;
+
+      setIsLoading(true);
+      try {
+        const data = await getShipments({ customerId: user.id });
+        setShipments(data);
+        filterShipments(data, activeTab, searchQuery);
+      } catch (error) {
+        console.error('Error fetching shipments:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchShipments();
+  }, [activeTab, filterShipments, searchQuery, user?.id]);
 
   // Handle tab change
   const handleTabChange = (value: string) => {

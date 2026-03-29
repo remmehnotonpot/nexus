@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +11,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Package, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function RegisterPage() {
-  const router = useRouter();
   const { register } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
